@@ -1,377 +1,288 @@
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
+import { Loader2, UploadCloud, FileText, Key, FileCheck2 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
-const Index = () => {
-  const [apiKey, setApiKey] = useState("");
+export default function Index() {
   const [file, setFile] = useState<File | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [reportUrl, setReportUrl] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [apiKey, setApiKey] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [reportUrl, setReportUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
+    if (e.target.files && e.target.files[0]) {
+      const selectedFile = e.target.files[0];
       if (selectedFile.name.endsWith('.csv')) {
         setFile(selectedFile);
       } else {
         toast({
           title: "Invalid file format",
-          description: "Please upload a CSV file from Google Search Console",
-          variant: "destructive"
+          description: "Please upload a CSV export from Google Search Console",
+          variant: "destructive",
         });
+        e.target.value = '';
       }
     }
   };
 
-  const handleUpload = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     if (!file) {
       toast({
-        title: "No file selected",
-        description: "Please select a CSV file to upload",
-        variant: "destructive"
+        title: "Missing file",
+        description: "Please upload a CSV export from Google Search Console",
+        variant: "destructive",
       });
       return;
     }
 
-    if (!apiKey) {
+    if (!apiKey || apiKey.length < 10) {
       toast({
-        title: "API Key missing",
-        description: "Please enter your Gemini API key",
-        variant: "destructive"
+        title: "Invalid API key",
+        description: "Please enter a valid Gemini API key",
+        variant: "destructive",
       });
       return;
     }
 
-    setIsProcessing(true);
-    setProgress(0);
-
-    // Create a FormData object to send the file and API key
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("api_key", apiKey);
+    setIsSubmitting(true);
+    setReportUrl(null);
 
     try {
-      // Simulate progress for now (will connect to real backend later)
-      const interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 95) {
-            clearInterval(interval);
-            return 95;
-          }
-          return prev + 5;
-        });
-      }, 500);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('api_key', apiKey);
 
-      // In a real scenario, we would make an actual API call to the FastAPI backend
-      // const response = await fetch("http://localhost:8000/analyze-seo", {
-      //   method: "POST",
-      //   body: formData,
-      // });
-      
-      // Simulate a delay for demo purposes
-      setTimeout(() => {
-        clearInterval(interval);
-        setProgress(100);
-        
-        // Mock a successful response
-        setReportUrl("/sample-report.pdf");
-        
-        toast({
-          title: "Analysis complete!",
-          description: "Your SEO report has been generated successfully."
-        });
-        
-        setIsProcessing(false);
-      }, 5000);
-      
-    } catch (error) {
-      setIsProcessing(false);
-      toast({
-        title: "Error processing file",
-        description: "There was an error processing your file. Please try again.",
-        variant: "destructive"
+      const response = await fetch('http://localhost:8000/analyze-seo', {
+        method: 'POST',
+        body: formData,
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to generate SEO report');
+      }
+
+      // Get the blob from the response
+      const blob = await response.blob();
+      
+      // Create a URL for the blob
+      const url = URL.createObjectURL(blob);
+      setReportUrl(url);
+      
+      toast({
+        title: "Report generated successfully",
+        description: "Your SEO analysis report is ready to download",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        title: "Error generating report",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800">
-      <header className="py-6 border-b bg-white/80 backdrop-blur-sm dark:bg-gray-950/80 border-gray-200 dark:border-gray-800">
-        <div className="container flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 2a4.5 4.5 0 0 0 0 9 4.5 4.5 0 0 1 0 9 10 10 0 0 0 0-18Z" />
-                <path d="M12 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
-                <path d="M12 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
-              </svg>
-            </div>
-            <h1 className="text-xl font-bold">SEO Seer</h1>
-          </div>
-          <div className="hidden md:flex gap-6 text-sm">
-            <a href="#" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition">How it works</a>
-            <a href="#" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition">About</a>
-            <a href="#" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition">Contact</a>
-          </div>
-        </div>
-      </header>
-
-      <main className="container py-12">
-        <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-10">
-            <h1 className="text-4xl font-extrabold tracking-tight mb-4 bg-gradient-to-r from-violet-700 to-indigo-600 bg-clip-text text-transparent">
-              SEO Analysis Made Intelligent
-            </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-              Upload your Google Search Console data and get AI-powered insights and actionable recommendations.
-            </p>
-          </div>
-
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle>Generate SEO Report</CardTitle>
-              <CardDescription>
-                Upload your Google Search Console export file to analyze your website's SEO performance
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="upload" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-6">
-                  <TabsTrigger value="upload">Upload Data</TabsTrigger>
-                  <TabsTrigger value="api">API Settings</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="upload" className="space-y-4">
-                  <div className="border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-lg p-8 text-center">
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept=".csv"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                    <div className="mb-4">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-gray-400">
-                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-                        <polyline points="14 2 14 8 20 8" />
-                        <path d="M8 13h2" />
-                        <path d="M8 17h2" />
-                        <path d="M14 13h2" />
-                        <path d="M14 17h2" />
-                      </svg>
+    <div className="container mx-auto px-4 py-8">
+      <div className="text-center mb-8">
+        <h1 className="text-4xl font-bold text-purple-800 mb-2">SEO Seer</h1>
+        <p className="text-xl text-gray-600">Advanced SEO Analysis & Insights</p>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-8 lg:col-start-3">
+          <Tabs defaultValue="upload" className="w-full">
+            <TabsList className="grid grid-cols-2 mb-6">
+              <TabsTrigger value="upload">Upload & Analyze</TabsTrigger>
+              <TabsTrigger value="about">About SEO Seer</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="upload">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Generate SEO Analysis Report</CardTitle>
+                  <CardDescription>
+                    Upload your Google Search Console export and get comprehensive insights and recommendations
+                  </CardDescription>
+                </CardHeader>
+                
+                <CardContent>
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="file">Search Console CSV Export</Label>
+                      <div className="border-2 border-dashed rounded-md p-6 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer" onClick={() => document.getElementById('file')?.click()}>
+                        <div className="flex flex-col items-center justify-center space-y-2 text-center">
+                          <UploadCloud className="h-8 w-8 text-purple-500" />
+                          <div className="text-sm">
+                            <Label htmlFor="file" className="text-primary font-medium cursor-pointer">Click to upload</Label>
+                            <p className="text-gray-500">or drag and drop</p>
+                          </div>
+                          <p className="text-xs text-gray-500">CSV from Google Search Console</p>
+                          {file && (
+                            <div className="mt-2 flex items-center space-x-2 p-2 bg-purple-50 rounded-md">
+                              <FileCheck2 className="h-4 w-4 text-green-500" />
+                              <span className="text-sm text-gray-700">{file.name}</span>
+                            </div>
+                          )}
+                        </div>
+                        <Input id="file" type="file" accept=".csv" onChange={handleFileChange} className="hidden" />
+                      </div>
                     </div>
-                    {file ? (
-                      <div>
-                        <p className="text-sm font-medium">Selected file:</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">{file.name}</p>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="mt-2"
-                          onClick={() => {
-                            setFile(null);
-                            if (fileRef.current) fileRef.current.value = '';
-                          }}
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="apiKey">Gemini API Key</Label>
+                      <div className="flex items-center space-x-2">
+                        <div className="relative flex-1">
+                          <Key className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                          <Input 
+                            id="apiKey"
+                            type="password"
+                            placeholder="Enter your Gemini API key"
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value)}
+                            className="pl-8"
+                          />
+                        </div>
+                        <a 
+                          href="https://makersuite.google.com/app/apikey" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-purple-600 hover:text-purple-800 text-sm whitespace-nowrap"
                         >
-                          Change File
-                        </Button>
+                          Get API key
+                        </a>
                       </div>
+                      <p className="text-xs text-gray-500">
+                        Your API key is only used for processing and is not stored on our servers.
+                      </p>
+                    </div>
+                    
+                    <Alert className="bg-amber-50 border-amber-200">
+                      <AlertTitle className="text-amber-800">What will you get?</AlertTitle>
+                      <AlertDescription className="text-amber-700">
+                        A comprehensive PDF report with visualizations, keyword opportunities, content suggestions, and actionable recommendations.
+                      </AlertDescription>
+                    </Alert>
+                  </form>
+                </CardContent>
+                
+                <CardFooter className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                  <Button type="button" onClick={handleSubmit} disabled={isSubmitting} className="w-full">
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Generating report...
+                      </>
                     ) : (
-                      <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                          Drag and drop your CSV file, or click to browse
-                        </p>
-                        <Button 
-                          variant="outline" 
-                          onClick={() => fileRef.current?.click()}
-                        >
-                          Select File
-                        </Button>
-                      </div>
+                      <>Generate SEO Report</>
                     )}
+                  </Button>
+                  
+                  {reportUrl && (
+                    <Button variant="outline" onClick={() => window.open(reportUrl)} className="w-full">
+                      <FileText className="mr-2 h-4 w-4" />
+                      Download Report
+                    </Button>
+                  )}
+                </CardFooter>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="about">
+              <Card>
+                <CardHeader>
+                  <CardTitle>About SEO Seer</CardTitle>
+                  <CardDescription>
+                    Transforming your Google Search Console data into actionable SEO insights
+                  </CardDescription>
+                </CardHeader>
+                
+                <CardContent className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">What is SEO Seer?</h3>
+                    <p className="text-gray-600">
+                      SEO Seer is a powerful analysis tool that transforms Google Search Console exports into comprehensive 
+                      SEO reports with actionable insights. Using advanced analytics combined with AI, it provides meaningful 
+                      recommendations for improving your website's search engine performance.
+                    </p>
                   </div>
                   
-                  {isProcessing && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Processing your data...</span>
-                        <span>{progress}%</span>
+                  <Separator />
+                  
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">Features</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-start space-x-2">
+                        <div className="bg-purple-100 p-2 rounded-full mt-1">
+                          <FileText className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium">Comprehensive Analysis</h4>
+                          <p className="text-sm text-gray-600">Advanced SEO metrics and visualizations</p>
+                        </div>
                       </div>
-                      <Progress value={progress} />
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="api" className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="api-key">Gemini API Key</Label>
-                    <Input
-                      id="api-key"
-                      type="password"
-                      placeholder="Enter your Gemini API key"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                    />
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Your API key is required to generate AI-powered insights and recommendations.
-                    </p>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-            <CardFooter className="flex justify-between">
-              <Button variant="outline" onClick={() => {
-                setFile(null);
-                setApiKey("");
-                setProgress(0);
-                setReportUrl("");
-                if (fileRef.current) fileRef.current.value = '';
-              }}>
-                Reset
-              </Button>
-              <Button 
-                onClick={handleUpload} 
-                disabled={isProcessing || !file || !apiKey}
-                className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
-              >
-                {isProcessing ? "Processing..." : "Generate Report"}
-              </Button>
-            </CardFooter>
-          </Card>
-          
-          {reportUrl && (
-            <Card className="mt-8 border-0 shadow-lg">
-              <CardHeader>
-                <CardTitle>Your SEO Report</CardTitle>
-                <CardDescription>
-                  Your report has been generated successfully
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg mb-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 text-indigo-600">
-                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-                        <polyline points="14 2 14 8 20 8" />
-                      </svg>
-                      <span>SEO Analysis Report.pdf</span>
-                    </div>
-                    <Button variant="ghost" size="sm" asChild>
-                      <a href={reportUrl} download>
-                        Download
-                      </a>
-                    </Button>
-                  </div>
-                </div>
-                <div className="grid gap-4">
-                  <div className="p-4 border rounded-lg">
-                    <h3 className="font-medium mb-2">Report Summary</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      The report includes a comprehensive analysis of your website's SEO performance, 
-                      including traffic trends, keyword performance, and actionable recommendations.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="p-4 border rounded-lg">
-                      <h3 className="font-medium mb-2">Top Keywords</h3>
-                      <ul className="text-sm space-y-1">
-                        <li className="text-gray-500 dark:text-gray-400">organic traffic optimization</li>
-                        <li className="text-gray-500 dark:text-gray-400">seo strategies 2023</li>
-                        <li className="text-gray-500 dark:text-gray-400">google ranking factors</li>
-                      </ul>
-                    </div>
-                    <div className="p-4 border rounded-lg">
-                      <h3 className="font-medium mb-2">Content Opportunities</h3>
-                      <ul className="text-sm space-y-1">
-                        <li className="text-gray-500 dark:text-gray-400">backlink building guide</li>
-                        <li className="text-gray-500 dark:text-gray-400">technical seo audit</li>
-                        <li className="text-gray-500 dark:text-gray-400">core web vitals optimization</li>
-                      </ul>
+                      <div className="flex items-start space-x-2">
+                        <div className="bg-purple-100 p-2 rounded-full mt-1">
+                          <FileText className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium">AI-Powered Insights</h4>
+                          <p className="text-sm text-gray-600">Gemini AI provides intelligent recommendations</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <div className="bg-purple-100 p-2 rounded-full mt-1">
+                          <FileText className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium">Keyword Opportunities</h4>
+                          <p className="text-sm text-gray-600">Discover new high-potential keywords</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <div className="bg-purple-100 p-2 rounded-full mt-1">
+                          <FileText className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium">Content Suggestions</h4>
+                          <p className="text-sm text-gray-600">Get ideas for new content based on your data</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                  
+                  <Separator />
+                  
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">How to Use</h3>
+                    <ol className="list-decimal pl-5 space-y-2 text-gray-600">
+                      <li>Export performance data from Google Search Console (Query, Clicks, Impressions, CTR, Position)</li>
+                      <li>Upload the CSV file using the form on the upload tab</li>
+                      <li>Provide your Gemini API key for AI-powered analysis</li>
+                      <li>Click "Generate SEO Report" and wait for processing</li>
+                      <li>Download your comprehensive PDF report</li>
+                    </ol>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
-
-        <div className="mt-16 max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold text-center mb-8">How It Works</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-violet-100 dark:bg-violet-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-600 dark:text-violet-400">
-                  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-                  <polyline points="14 2 14 8 20 8" />
-                </svg>
-              </div>
-              <h3 className="font-medium mb-2">1. Upload GSC Data</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Export your data from Google Search Console and upload the CSV file
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-600 dark:text-indigo-400">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 2a4.5 4.5 0 0 0 0 9 4.5 4.5 0 0 1 0 9 10 10 0 0 0 0-18Z" />
-                  <path d="M12 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
-                  <path d="M12 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
-                </svg>
-              </div>
-              <h3 className="font-medium mb-2">2. AI Analysis</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Our advanced algorithm analyzes your data with AI to extract insights
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 dark:text-blue-400">
-                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                </svg>
-              </div>
-              <h3 className="font-medium mb-2">3. Get Actionable Insights</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Receive a detailed PDF report with actionable recommendations
-              </p>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      <footer className="border-t border-gray-200 dark:border-gray-800 py-8 mt-12">
-        <div className="container">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="flex items-center gap-2 mb-4 md:mb-0">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 2a4.5 4.5 0 0 0 0 9 4.5 4.5 0 0 1 0 9 10 10 0 0 0 0-18Z" />
-                </svg>
-              </div>
-              <span className="font-semibold">SEO Seer</span>
-            </div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              © {new Date().getFullYear()} SEO Seer. All rights reserved.
-            </div>
-          </div>
-        </div>
-      </footer>
+      </div>
     </div>
   );
-};
-
-export default Index;
+}
