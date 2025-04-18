@@ -1,73 +1,107 @@
-# Welcome to your Lovable project
 
-## Project info
+# SEO Seer: Advanced SEO Analysis Tool
 
-**URL**: https://lovable.dev/projects/19189e66-ba2e-4c71-8daa-2fd68ee9ea18
+SEO Seer is a powerful web application that transforms Google Search Console exports into comprehensive SEO reports with actionable insights. The application uses advanced analytics combined with AI to provide meaningful recommendations for improving your website's search engine performance.
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- **CSV Upload**: Easily upload your Google Search Console export data
+- **AI-Powered Analysis**: Leverages Gemini AI for intelligent insights
+- **Detailed PDF Reports**: Receive comprehensive analysis reports
+- **Actionable Recommendations**: Get clear steps to improve your SEO
+- **Keyword Opportunities**: Discover new keywords to target
+- **Content Suggestions**: Get ideas for new content based on your data
 
-**Use Lovable**
+## Project Structure
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/19189e66-ba2e-4c71-8daa-2fd68ee9ea18) and start prompting.
+- **Frontend**: React application with modern UI
+- **Backend**: FastAPI Python server for data processing and AI analysis
 
-Changes made via Lovable will be committed automatically to this repo.
+## Setup Instructions
 
-**Use your preferred IDE**
+### Frontend Setup
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+2. Start the development server:
+   ```bash
+   npm run dev
+   ```
 
-Follow these steps:
+3. The React application will be available at http://localhost:8080
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Backend Setup
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+1. Navigate to the API directory:
+   ```bash
+   cd api
+   ```
 
-# Step 3: Install the necessary dependencies.
-npm i
+2. Create a virtual environment (recommended):
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-**Edit a file directly in GitHub**
+4. Start the FastAPI server:
+   ```bash
+   uvicorn main:app --reload
+   ```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+5. The backend API will be available at http://localhost:8000
 
-**Use GitHub Codespaces**
+## API Endpoints
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- `POST /analyze-seo`: Upload GSC data and generate SEO report
+  - Parameters:
+    - `file`: CSV file from Google Search Console
+    - `api_key`: Gemini API key for AI analysis
 
-## What technologies are used for this project?
+## How It Works
 
-This project is built with:
+1. **Data Upload**: Users upload their Google Search Console export data
+2. **Data Processing**: The system analyzes the CSV data to extract key metrics and patterns
+3. **AI Analysis**: Gemini AI is used to generate insights and recommendations
+4. **Report Generation**: A comprehensive PDF report is created with visualizations and actionable steps
+5. **Download**: Users can download and view their complete SEO analysis
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Getting a Gemini API Key
 
-## How can I deploy this project?
+To use SEO Seer, you'll need a Gemini API key:
 
-Simply open [Lovable](https://lovable.dev/projects/19189e66-ba2e-4c71-8daa-2fd68ee9ea18) and click on Share -> Publish.
+1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Sign in with your Google account
+3. Create a new API key
+4. Copy the key and paste it into the application when prompted
 
-## Can I connect a custom domain to my Lovable project?
+## Example Google Search Console Export
 
-Yes, you can!
+For testing, you can export data from Google Search Console:
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+1. Go to Google Search Console
+2. Select your property
+3. Navigate to Performance
+4. Set your desired date range
+5. Click "Export" and choose "CSV"
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## Security Notes
+
+- API keys are only used for processing and are not stored on our servers
+- Data uploads are processed and then removed to ensure privacy
+
+## Technologies Used
+
+- **Frontend**: React, TypeScript, TailwindCSS
+- **Backend**: FastAPI, Python
+- **Data Processing**: Pandas, NumPy, Scikit-learn
+- **AI Integration**: Google Generative AI (Gemini)
+- **Visualization**: Matplotlib
+- **Report Generation**: ReportLab
