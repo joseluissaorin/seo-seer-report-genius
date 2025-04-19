@@ -1,4 +1,3 @@
-
 # SEO Seer: Complete Setup Documentation
 
 ## Table of Contents
@@ -95,6 +94,13 @@ python run_server.py
 ```
 
 The FastAPI backend will be available at http://localhost:4568
+
+### Frontend Development Server
+```bash
+npm run dev
+```
+
+The frontend will be available at http://localhost:4567
 
 ### API Key Configuration
 1. Get a Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
