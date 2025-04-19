@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -138,7 +139,7 @@ export default function Index() {
         description: `Processing ${files.length} CSV file(s)...`,
       });
 
-      const response = await fetch('http://localhost:8000/analyze-seo', {
+      const response = await fetch('http://localhost:4568/analyze-seo', {
         method: 'POST',
         body: formData,
       });
