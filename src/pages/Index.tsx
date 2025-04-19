@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -281,7 +282,7 @@ export default function Index() {
                             id="file" 
                             type="file" 
                             accept=".csv" 
-                            multiple  // Add multiple attribute
+                            multiple  
                             onChange={handleFileChange} 
                             className="hidden" 
                           />
@@ -678,4 +679,35 @@ export default function Index() {
                       </ol>
                     </div>
                     
-                    <div className="bg-purple-50 p-6 rounded-xl border border-purple-100 flex gap
+                    <div className="bg-purple-50 p-6 rounded-xl border border-purple-100 flex flex-col sm:flex-row gap-6 items-center">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="h-5 w-5 text-purple-600" />
+                          <h3 className="text-lg font-semibold text-purple-800">Ready to try SEO Seer Pro?</h3>
+                        </div>
+                        <p className="text-gray-600 mb-4">
+                          Upload your Google Search Console exports and discover actionable insights to improve your SEO performance today.
+                        </p>
+                        <Button 
+                          onClick={navigateToUploadTab}
+                          className="bg-gradient-to-r from-purple-700 to-purple-500 hover:from-purple-800 hover:to-purple-600"
+                        >
+                          Start Analyzing Now
+                        </Button>
+                      </div>
+                      <div className="flex-1 flex justify-center">
+                        <div className="p-4 bg-purple-100 rounded-xl">
+                          <TrendingUp className="h-16 w-16 text-purple-700" />
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
