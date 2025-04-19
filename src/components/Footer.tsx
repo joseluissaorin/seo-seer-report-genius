@@ -3,7 +3,7 @@ import { Heart, Copyright } from "lucide-react";
 
 const Footer = () => {
   return (
-    <footer className="py-6 text-center text-muted-foreground border-t bg-secondary/40 backdrop-blur-sm animate-fade-in">
+    <footer className="py-6 text-center text-muted-foreground border-t bg-background/90 backdrop-blur-sm animate-fade-in">
       <div className="container mx-auto px-4">
         <p className="flex items-center justify-center gap-2 text-sm">
           made with 
