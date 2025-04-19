@@ -264,15 +264,16 @@ def generate_pdf_report(analysis_results: Dict, api_key: str) -> str:
         
         # Set up generation configuration
         generation_config = {
-            "temperature": 0.7,
+            "temperature": 1,
             "top_p": 0.95,
             "top_k": 64,
-            "max_output_tokens": 4000,
+            "max_output_tokens": 65536,
+            "response_mime_type": "text/plain",
         }
         
         # Create the model with appropriate parameters
         model = genai.GenerativeModel(
-            model_name="gemini-1.5-pro",
+            model_name="gemini-2.5-pro-preview-03-25",
             generation_config=generation_config
         )
         
@@ -281,18 +282,21 @@ def generate_pdf_report(analysis_results: Dict, api_key: str) -> str:
         for key, value in analysis_results.items():
             if key.endswith('_visualizations'):
                 continue  # Skip visualization data
-            simplified_results[key] = value
+            if isinstance(value, pd.DataFrame):
+                simplified_results[key] = value.to_dict(orient='records')[:10]
+            elif isinstance(value, dict):
+                simplified_results[key] = {k: str(v)[:1000] if isinstance(v, (list, dict)) else v for k, v in value.items()}
+            else:
+                simplified_results[key] = str(value)[:1000]
             
         # Create prompt for the summary
-        summary_prompt = f"""
-        Create a concise executive summary for an SEO analysis report based on the following data:
-        {json.dumps(simplified_results, default=str)}
+        summary_prompt = "Create a concise executive summary for an SEO analysis report based on the following data: " + json.dumps(simplified_results, default=str)[:7000] + "\n\nFocus on key insights, trends, and actionable recommendations. Keep it under 300 words."
         
-        Focus on key insights, trends, and actionable recommendations. Keep it under 300 words.
-        """
+        # Create a chat session
+        chat_session = model.start_chat(history=[])
         
         # Generate the summary
-        response = model.generate_content(summary_prompt)
+        response = chat_session.send_message(summary_prompt)
         summary_text = response.text
         
         # Add the generated summary to the PDF
@@ -370,8 +374,6 @@ def generate_pdf_report(analysis_results: Dict, api_key: str) -> str:
             
             elements.append(Spacer(1, 10))
     
-    # ... keep existing code (remaining PDF report generation including all analysis sections)
-    
     # Add final recommendations from AI
     elements.append(Paragraph("Strategic Recommendations", styles['Heading1']))
     
@@ -381,7 +383,12 @@ def generate_pdf_report(analysis_results: Dict, api_key: str) -> str:
         for key, value in analysis_results.items():
             if key.endswith('_visualizations'):
                 continue  # Skip visualization data
-            simplified_results[key] = value
+            if isinstance(value, pd.DataFrame):
+                simplified_results[key] = value.to_dict(orient='records')[:10]
+            elif isinstance(value, dict):
+                simplified_results[key] = {k: str(v)[:1000] if isinstance(v, (list, dict)) else v for k, v in value.items()}
+            else:
+                simplified_results[key] = str(value)[:1000]
             
         # Create the prompt for final recommendations
         final_prompt = f"""
