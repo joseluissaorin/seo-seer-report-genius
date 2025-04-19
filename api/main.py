@@ -33,6 +33,22 @@ from utils.visualization import (
     create_keyword_research_visualizations,
     create_competitor_visualizations
 )
+from utils.enhanced_visualization import (
+    create_seo_health_visualizations,
+    create_mobile_visualizations,
+    create_cannibalization_visualizations,
+    create_serp_feature_visualizations,
+    create_backlink_visualizations,
+    create_content_gap_visualizations,
+    create_serp_preview_visualizations
+)
+from utils.seo_health import SEOHealthAnalyzer
+from utils.mobile_analyzer import analyze_mobile_friendliness
+from utils.keyword_cannibalization import detect_keyword_cannibalization
+from utils.serp_feature_analyzer import analyze_serp_features
+from utils.serp_preview import generate_serp_previews
+from utils.backlink_analyzer import analyze_backlinks
+from utils.content_gap_analyzer import analyze_content_gaps
 
 app = FastAPI()
 
@@ -62,6 +78,7 @@ async def analyze_seo(file: UploadFile, api_key: str = Form(...)):
         query_analyzer = QueryAnalyzer()
         keyword_researcher = KeywordResearcher()
         competitor_analyzer = CompetitorAnalyzer()
+        seo_health_analyzer = SEOHealthAnalyzer()
         
         # Perform analyses
         analysis_results = {}
@@ -126,6 +143,54 @@ async def analyze_seo(file: UploadFile, api_key: str = Form(...)):
                 analysis_results['competitor_visualizations'] = create_competitor_visualizations(competitor_data)
             except Exception as e:
                 print(f"Competitor analysis error: {str(e)}")
+            
+            # Add SEO Health Score
+            try:
+                health_score = seo_health_analyzer.calculate_health_score(data_frames)
+                analysis_results['seo_health'] = health_score
+                analysis_results['seo_health_visualizations'] = create_seo_health_visualizations(health_score)
+            except Exception as e:
+                print(f"SEO Health analysis error: {str(e)}")
+            
+            # Add Keyword Cannibalization Detection
+            try:
+                cannibalization_results = detect_keyword_cannibalization(data_frames)
+                analysis_results['keyword_cannibalization'] = cannibalization_results
+                analysis_results['cannibalization_visualizations'] = create_cannibalization_visualizations(cannibalization_results)
+            except Exception as e:
+                print(f"Cannibalization analysis error: {str(e)}")
+            
+            # Add SERP Feature Analysis
+            try:
+                serp_features = analyze_serp_features(data_frames)
+                analysis_results['serp_features'] = serp_features
+                analysis_results['serp_visualizations'] = create_serp_feature_visualizations(serp_features)
+            except Exception as e:
+                print(f"SERP feature analysis error: {str(e)}")
+                
+            # Add SERP Preview Generator
+            try:
+                serp_previews = generate_serp_previews(data_frames)
+                analysis_results['serp_previews'] = serp_previews
+                analysis_results['serp_preview_visualizations'] = create_serp_preview_visualizations(serp_previews)
+            except Exception as e:
+                print(f"SERP preview error: {str(e)}")
+                
+            # Add Backlink Analysis
+            try:
+                backlink_data = analyze_backlinks(data_frames)
+                analysis_results['backlink_analysis'] = backlink_data
+                analysis_results['backlink_visualizations'] = create_backlink_visualizations(backlink_data)
+            except Exception as e:
+                print(f"Backlink analysis error: {str(e)}")
+                
+            # Add Content Gap Analysis
+            try:
+                content_gaps = analyze_content_gaps(data_frames, analysis_results.get('competitor_analysis', None))
+                analysis_results['content_gaps'] = content_gaps
+                analysis_results['content_gap_visualizations'] = create_content_gap_visualizations(content_gaps)
+            except Exception as e:
+                print(f"Content gap analysis error: {str(e)}")
         
         # Device analysis if available
         if 'devices' in data_frames:
@@ -135,6 +200,14 @@ async def analyze_seo(file: UploadFile, api_key: str = Form(...)):
             analysis_results['device_visualizations'] = create_device_visualizations(
                 analysis_results['device_analysis']
             )
+            
+            # Add Mobile Optimization Analysis
+            try:
+                mobile_optimization = analyze_mobile_friendliness(data_frames)
+                analysis_results['mobile_optimization'] = mobile_optimization
+                analysis_results['mobile_visualizations'] = create_mobile_visualizations(mobile_optimization)
+            except Exception as e:
+                print(f"Mobile optimization analysis error: {str(e)}")
         
         # Temporal analysis if available
         if 'dates' in data_frames:
@@ -205,6 +278,133 @@ def generate_pdf_report(analysis_results: Dict, api_key: str) -> str:
     
     elements.append(Paragraph(summary_text, styles['Normal']))
     elements.append(Spacer(1, 20))
+    
+    # Add SEO Health Score section if available
+    if 'seo_health' in analysis_results:
+        elements.append(Paragraph("SEO Health Score", styles['Heading1']))
+        
+        health_data = analysis_results['seo_health']
+        overall_score = health_data.get('overall_score', 0)
+        
+        # Add overall score
+        elements.append(Paragraph(f"Overall Score: {overall_score}/100", styles['Heading2']))
+        
+        # Add score explanation based on range
+        score_explanation = ""
+        if overall_score >= 80:
+            score_explanation = "Your site has excellent SEO health. Continue maintaining best practices."
+        elif overall_score >= 60:
+            score_explanation = "Your site has good SEO health with room for improvement in specific areas."
+        elif overall_score >= 40:
+            score_explanation = "Your site requires significant SEO improvements to compete effectively."
+        else:
+            score_explanation = "Your site has critical SEO issues that need immediate attention."
+        
+        elements.append(Paragraph(score_explanation, styles['Normal']))
+        elements.append(Spacer(1, 10))
+        
+        # Add component scores table
+        if 'component_scores' in health_data:
+            elements.append(Paragraph("Component Scores", styles['Heading2']))
+            
+            component_scores = health_data['component_scores']
+            
+            # Create a table for component scores
+            data = [["Component", "Score", "Status"]]
+            
+            for component, score in component_scores.items():
+                component_name = component.replace('_', ' ').title()
+                
+                # Determine status based on score
+                status = "Excellent" if score >= 80 else "Good" if score >= 60 else "Needs Improvement" if score >= 40 else "Critical"
+                
+                data.append([component_name, f"{score:.1f}/100", status])
+            
+            t = Table(data, colWidths=[200, 100, 150])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Left-align first column
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 20))
+        
+        # Add recommendations
+        if 'recommendations' in health_data and health_data['recommendations']:
+            elements.append(Paragraph("Health Score Recommendations", styles['Heading2']))
+            
+            for i, rec in enumerate(health_data['recommendations'][:5]):  # Limit to top 5
+                elements.append(Paragraph(f"{i+1}. {rec['title']}", styles['Heading3']))
+                elements.append(Paragraph(rec['description'], styles['Normal']))
+                elements.append(Spacer(1, 10))
+            
+            elements.append(Spacer(1, 10))
+    
+    # Add mobile optimization section if available
+    if 'mobile_optimization' in analysis_results:
+        elements.append(Paragraph("Mobile Optimization Analysis", styles['Heading1']))
+        
+        mobile_data = analysis_results['mobile_optimization']
+        mobile_score = mobile_data.get('mobile_score', 0)
+        
+        # Add mobile score
+        elements.append(Paragraph(f"Mobile Optimization Score: {mobile_score:.1f}/100", styles['Heading2']))
+        
+        # Add score explanation
+        score_explanation = ""
+        if mobile_score >= 80:
+            score_explanation = "Your site is well optimized for mobile devices."
+        elif mobile_score >= 60:
+            score_explanation = "Your site has good mobile optimization with some improvements needed."
+        elif mobile_score >= 40:
+            score_explanation = "Your site needs significant mobile optimization improvements."
+        else:
+            score_explanation = "Your site has critical mobile usability issues that require immediate attention."
+        
+        elements.append(Paragraph(score_explanation, styles['Normal']))
+        elements.append(Spacer(1, 10))
+        
+        # Add mobile issues summary if available
+        if 'issues_summary' in mobile_data and mobile_data['issues_summary']:
+            elements.append(Paragraph("Mobile Usability Issues", styles['Heading2']))
+            
+            issues = mobile_data['issues_summary']
+            
+            # Create a table for issues
+            data = [["Issue Type", "Count"]]
+            
+            for issue, count in issues.items():
+                issue_name = issue.replace('_', ' ').title()
+                data.append([issue_name, str(count)])
+            
+            t = Table(data, colWidths=[300, 100])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Left-align first column
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 20))
+        
+        # Add recommendations
+        if 'recommendations' in mobile_data and mobile_data['recommendations']:
+            elements.append(Paragraph("Mobile Optimization Recommendations", styles['Heading2']))
+            
+            for i, rec in enumerate(mobile_data['recommendations'][:5]):  # Limit to top 5
+                elements.append(Paragraph(f"{i+1}. {rec['issue']}", styles['Heading3']))
+                elements.append(Paragraph(rec['description'], styles['Normal']))
+                elements.append(Paragraph(f"Impact: {rec['impact'].title()}", styles['Italic']))
+                elements.append(Spacer(1, 10))
+            
+            elements.append(Spacer(1, 10))
     
     # Add query analysis section if available
     if 'query_analysis' in analysis_results:
@@ -278,228 +478,451 @@ def generate_pdf_report(analysis_results: Dict, api_key: str) -> str:
         except Exception as e:
             pass
     
-    # Add keyword research section if available
-    if 'keyword_research' in analysis_results:
-        elements.append(Paragraph("Keyword Research & Trends", styles['Heading1']))
-        elements.append(Spacer(1, 10))
+    # Add keyword cannibalization section if available
+    if 'keyword_cannibalization' in analysis_results:
+        elements.append(Paragraph("Keyword Cannibalization Analysis", styles['Heading1']))
         
-        # Add keyword difficulty information
-        if 'difficulty' in analysis_results['keyword_research']:
-            elements.append(Paragraph("Keyword Difficulty Analysis", styles['Heading2']))
+        cannibalization_data = analysis_results['keyword_cannibalization']
+        
+        # Add summary
+        if 'severity_summary' in cannibalization_data:
+            severity = cannibalization_data['severity_summary']
             
-            difficulties = analysis_results['keyword_research']['difficulty']
-            data = [["Keyword", "Difficulty Score", "Recommendation"]]
+            elements.append(Paragraph("Cannibalization Summary", styles['Heading2']))
             
-            for keyword, score in difficulties.items():
-                recommendation = "Easy to rank for" if score < 30 else "Moderate competition" if score < 70 else "Highly competitive"
-                data.append([keyword, f"{score:.1f}/100", recommendation])
+            # Create a table for severity summary
+            data = [["Severity", "Count"]]
+            data.append(["High", str(severity['high'])])
+            data.append(["Medium", str(severity['medium'])])
+            data.append(["Low", str(severity['low'])])
+            data.append(["Total", str(severity['high'] + severity['medium'] + severity['low'])])
             
-            t = Table(data, colWidths=[200, 100, 200])
+            t = Table(data, colWidths=[200, 100])
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
-            elements.append(t)
-            elements.append(Spacer(1, 20))
-        
-        # Add related queries if available
-        if 'related_queries' in analysis_results['keyword_research']:
-            elements.append(Paragraph("Related Search Queries", styles['Heading2']))
-            
-            for keyword, queries in analysis_results['keyword_research']['related_queries'].items():
-                elements.append(Paragraph(f"Related to: {keyword}", styles['Heading3']))
-                
-                if 'top' in queries and queries['top']:
-                    data = [["Related Query", "Score", "Type"]]
-                    
-                    for query_info in queries['top'][:10]:  # Top 10 related queries
-                        data.append([
-                            query_info['keyword'],
-                            str(query_info['score']),
-                            query_info['type'].capitalize()
-                        ])
-                    
-                    t = Table(data, colWidths=[250, 100, 100])
-                    t.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.black)
-                    ]))
-                    elements.append(t)
-                    elements.append(Spacer(1, 20))
-    
-    # Add competitor analysis section if available
-    if 'competitor_analysis' in analysis_results:
-        elements.append(Paragraph("Competitor Analysis", styles['Heading1']))
-        elements.append(Spacer(1, 10))
-        
-        # Add competitors overview
-        if 'competitors' in analysis_results['competitor_analysis']:
-            elements.append(Paragraph("Top Competitors", styles['Heading2']))
-            
-            competitors = analysis_results['competitor_analysis']['competitors']
-            data = [["Competitor Domain", "Appearances", "Share (%)"]]
-            
-            for domain, metrics in competitors.items():
-                data.append([
-                    domain,
-                    str(metrics['appearances']),
-                    f"{metrics['share']:.2f}%"
-                ])
-            
-            t = Table(data, colWidths=[200, 100, 150])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
-            elements.append(t)
-            elements.append(Spacer(1, 20))
-        
-        # Add content analysis if available
-        if 'content_analysis' in analysis_results['competitor_analysis']:
-            content = analysis_results['competitor_analysis']['content_analysis']
-            elements.append(Paragraph("Competitor Content Analysis", styles['Heading2']))
-            
-            # Content metrics
-            data = [["Metric", "Value"]]
-            data.append(["Word Count", str(content.get('word_count', 0))])
-            data.append(["Internal Links", str(content.get('links', {}).get('internal', 0))])
-            data.append(["External Links", str(content.get('links', {}).get('external', 0))])
-            
-            t = Table(data, colWidths=[200, 250])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Left-align first column
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
                 ('GRID', (0, 0), (-1, -1), 1, colors.black)
             ]))
             elements.append(t)
             elements.append(Spacer(1, 10))
+        
+        # Add top cannibalization issues
+        if 'cannibalization_issues' in cannibalization_data and cannibalization_data['cannibalization_issues']:
+            elements.append(Paragraph("Top Cannibalization Issues", styles['Heading2']))
             
-            # Keyword density
-            if 'keyword_density' in content and content['keyword_density']:
-                elements.append(Paragraph("Top Keywords in Competitor Content", styles['Heading3']))
+            issues = cannibalization_data['cannibalization_issues'][:5]  # Top 5 issues
+            
+            for i, issue in enumerate(issues):
+                elements.append(Paragraph(f"Issue {i+1}: {issue['query']}", styles['Heading3']))
                 
-                data = [["Keyword", "Density (%)"]]
-                for keyword, density in list(content['keyword_density'].items())[:10]:
-                    data.append([keyword, f"{density:.2f}%"])
+                # Create a table for issue details
+                data = [["Severity", issue['severity'].upper()]]
+                data.append(["Primary Page", issue['primary_page']])
+                data.append(["Competing Pages", ", ".join(issue['competing_pages'][:2]) + 
+                            ("..." if len(issue['competing_pages']) > 2 else "")])
+                data.append(["Position Range", f"{issue['metrics']['best_position']:.1f} - {issue['metrics']['worst_position']:.1f}"])
+                data.append(["Impressions", str(issue['metrics']['total_impressions'])])
                 
-                t = Table(data, colWidths=[200, 100])
+                t = Table(data, colWidths=[150, 350])
                 t.setStyle(TableStyle([
                     ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                     ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
                     ('GRID', (0, 0), (-1, -1), 1, colors.black)
                 ]))
                 elements.append(t)
-                elements.append(Spacer(1, 20))
-    
-    # Add device analysis section if available
-    if 'device_analysis' in analysis_results:
-        elements.append(Paragraph("Device Analysis", styles['Heading1']))
-        elements.append(Spacer(1, 10))
-        
-        device_data = analysis_results['device_analysis']['metrics']
-        data = [["Device", "Clicks", "Impressions", "Avg Position", "Avg CTR", "Share"]]
-        
-        for device, metrics in device_data.items():
-            data.append([
-                device,
-                str(metrics['total_clicks']),
-                str(metrics['total_impressions']),
-                f"{metrics['avg_position']:.2f}",
-                f"{metrics['avg_ctr']:.2f}%",
-                f"{metrics['impression_share']:.2f}%"
-            ])
-        
-        t = Table(data, colWidths=[80, 70, 90, 90, 80, 80])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
-        elements.append(t)
-        elements.append(Spacer(1, 10))
+                elements.append(Spacer(1, 10))
         
         # Add recommendations
-        if 'recommendations' in analysis_results['device_analysis']:
-            elements.append(Paragraph("Device Recommendations", styles['Heading2']))
-            for rec in analysis_results['device_analysis']['recommendations']:
-                elements.append(Paragraph(f"• {rec}", styles['Normal']))
+        if 'recommendations' in cannibalization_data and cannibalization_data['recommendations']:
+            elements.append(Paragraph("Cannibalization Recommendations", styles['Heading2']))
+            
+            for i, rec in enumerate(cannibalization_data['recommendations'][:5]):  # Limit to top 5
+                elements.append(Paragraph(f"{i+1}. {rec['title']}", styles['Heading3']))
+                elements.append(Paragraph(rec['description'], styles['Normal']))
+                elements.append(Paragraph(f"Impact: {rec['impact'].title()}", styles['Italic']))
+                elements.append(Spacer(1, 10))
+            
+            elements.append(Spacer(1, 10))
     
-    # Add temporal analysis section if available
-    if 'temporal_analysis' in analysis_results:
-        elements.append(Paragraph("Temporal Analysis", styles['Heading1']))
-        elements.append(Spacer(1, 10))
+    # Add SERP features section if available
+    if 'serp_features' in analysis_results:
+        elements.append(Paragraph("SERP Feature Analysis", styles['Heading1']))
         
-        # Add growth metrics
-        if 'growth_metrics' in analysis_results['temporal_analysis']:
-            elements.append(Paragraph("Growth Trends", styles['Heading2']))
-            growth = analysis_results['temporal_analysis']['growth_metrics']
+        serp_data = analysis_results['serp_features']
+        
+        # Add feature summary
+        if 'feature_summary' in serp_data and serp_data['feature_summary']:
+            elements.append(Paragraph("SERP Feature Distribution", styles['Heading2']))
             
-            data = [["Metric", "Growth Rate", "Trend", "Volatility"]]
-            for metric, values in growth.items():
-                data.append([
-                    metric.title(),
-                    f"{values['growth_rate']:.2f}%",
-                    values['trend_direction'].upper(),
-                    f"{values['volatility']:.2f}%"
-                ])
+            features = serp_data['feature_summary']
             
-            t = Table(data, colWidths=[100, 100, 100, 100])
+            # Create a table for feature summary
+            data = [["Feature Type", "Occurrences"]]
+            
+            for feature, count in sorted(features.items(), key=lambda x: x[1], reverse=True):
+                feature_name = feature.replace('_', ' ').title()
+                data.append([feature_name, str(count)])
+            
+            t = Table(data, colWidths=[250, 150])
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Left-align first column
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
                 ('GRID', (0, 0), (-1, -1), 1, colors.black)
             ]))
             elements.append(t)
             elements.append(Spacer(1, 20))
-    
-    # Add geographic analysis section if available
-    if 'geographic_analysis' in analysis_results:
-        elements.append(Paragraph("Geographic Analysis", styles['Heading1']))
-        elements.append(Spacer(1, 10))
         
-        # Add opportunities
-        if 'opportunities' in analysis_results['geographic_analysis']:
-            elements.append(Paragraph("Geographic Opportunities", styles['Heading2']))
-            opps = analysis_results['geographic_analysis']['opportunities']
+        # Add feature opportunities
+        if 'feature_opportunities' in serp_data and serp_data['feature_opportunities']:
+            elements.append(Paragraph("SERP Feature Opportunities", styles['Heading2']))
             
-            for opp in opps[:5]:  # Limit to top 5
-                if opp['type'] == 'ctr_improvement':
-                    elements.append(Paragraph(
-                        f"• {opp['country']}: CTR improvement opportunity. Current: {opp['current_ctr']:.2f}%, " +
-                        f"Benchmark: {opp['benchmark_ctr']:.2f}%",
-                        styles['Normal']
-                    ))
-                else:
-                    elements.append(Paragraph(
-                        f"• {opp['country']}: Ranking improvement opportunity. Current position: {opp['current_position']:.2f}",
-                        styles['Normal']
-                    ))
+            opportunities = serp_data['feature_opportunities'][:5]  # Top 5 opportunities
             
+            # Create a table for opportunities
+            data = [["Query", "Feature Type", "Current Position", "Opportunity Score"]]
+            
+            for opp in opportunities:
+                query = opp['query'] if len(opp['query']) < 30 else opp['query'][:27] + "..."
+                data.append([
+                    query,
+                    opp['feature'],
+                    f"{opp['current_position']:.1f}",
+                    f"{opp['opportunity_score']:.1f}"
+                ])
+            
+            t = Table(data, colWidths=[180, 120, 100, 100])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Left-align first column
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(t)
             elements.append(Spacer(1, 20))
+        
+        # Add recommendations
+        if 'recommendations' in serp_data and serp_data['recommendations']:
+            elements.append(Paragraph("SERP Feature Recommendations", styles['Heading2']))
+            
+            for i, rec in enumerate(serp_data['recommendations'][:5]):  # Limit to top 5
+                elements.append(Paragraph(f"{i+1}. {rec['title']}", styles['Heading3']))
+                elements.append(Paragraph(rec['description'], styles['Normal']))
+                elements.append(Paragraph(f"Impact: {rec['impact'].title()}", styles['Italic']))
+                elements.append(Spacer(1, 10))
+            
+            elements.append(Spacer(1, 10))
+    
+    # Add SERP preview section if available
+    if 'serp_previews' in analysis_results:
+        elements.append(Paragraph("SERP Preview Analysis", styles['Heading1']))
+        
+        preview_data = analysis_results['serp_previews']
+        
+        # Add optimization tips
+        if 'optimization_tips' in preview_data and preview_data['optimization_tips']:
+            tips = preview_data['optimization_tips']
+            
+            elements.append(Paragraph("Meta Tag Optimization", styles['Heading2']))
+            
+            # Create a table for title issues
+            if 'title_issues' in tips:
+                title_issues = tips['title_issues']
+                
+                elements.append(Paragraph("Title Tag Issues", styles['Heading3']))
+                
+                data = [["Issue Type", "Count"]]
+                data.append(["Missing Titles", str(title_issues.get('missing', 0))])
+                data.append(["Too Short Titles", str(title_issues.get('too_short', 0))])
+                data.append(["Too Long Titles", str(title_issues.get('too_long', 0))])
+                data.append(["Optimal Titles", str(title_issues.get('optimal', 0))])
+                
+                t = Table(data, colWidths=[200, 100])
+                t.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Left-align first column
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ]))
+                elements.append(t)
+                elements.append(Spacer(1, 10))
+            
+            # Create a table for description issues
+            if 'description_issues' in tips:
+                desc_issues = tips['description_issues']
+                
+                elements.append(Paragraph("Meta Description Issues", styles['Heading3']))
+                
+                data = [["Issue Type", "Count"]]
+                data.append(["Missing Descriptions", str(desc_issues.get('missing', 0))])
+                data.append(["Too Short Descriptions", str(desc_issues.get('too_short', 0))])
+                data.append(["Too Long Descriptions", str(desc_issues.get('too_long', 0))])
+                data.append(["Optimal Descriptions", str(desc_issues.get('optimal', 0))])
+                
+                t = Table(data, colWidths=[200, 100])
+                t.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Left-align first column
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ]))
+                elements.append(t)
+                elements.append(Spacer(1, 20))
+        
+        # Add sample SERP previews
+        if 'previews' in preview_data and preview_data['previews']:
+            elements.append(Paragraph("Sample SERP Previews", styles['Heading2']))
+            
+            # Show one best and one worst preview
+            previews = preview_data['previews']
+            best_preview = max(previews, key=lambda x: x['optimization_score'])
+            worst_preview = min(previews, key=lambda x: x['optimization_score'])
+            
+            # Best preview
+            elements.append(Paragraph("Best Optimized Preview", styles['Heading3']))
+            
+            # Create a styled "preview box"
+            best_data = [[best_preview['displayed_title']]]
+            best_data.append([best_preview['display_url']])
+            best_data.append([best_preview['displayed_description']])
+            
+            best_table = Table(best_data, colWidths=[450])
+            best_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (0, 0), colors.lightblue),  # Title
+                ('BACKGROUND', (0, 1), (0, 1), colors.lightgreen),  # URL
+                ('BACKGROUND', (0, 2), (0, 2), colors.white),  # Description
+                ('TEXTCOLOR', (0, 0), (0, 0), colors.blue),  # Title
+                ('TEXTCOLOR', (0, 1), (0, 1), colors.green),  # URL
+                ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
+                ('TOPPADDING', (0, 0), (0, 2), 6),
+                ('BOTTOMPADDING', (0, 0), (0, 2), 6),
+                ('LEFTPADDING', (0, 0), (0, 2), 10),
+                ('RIGHTPADDING', (0, 0), (0, 2), 10),
+                ('BOX', (0, 0), (0, 2), 1, colors.grey)
+            ]))
+            elements.append(best_table)
+            elements.append(Paragraph(f"Score: {best_preview['optimization_score']}/100", styles['Italic']))
+            elements.append(Spacer(1, 10))
+            
+            # Worst preview
+            elements.append(Paragraph("Preview Needing Improvement", styles['Heading3']))
+            
+            # Create a styled "preview box"
+            worst_data = [[worst_preview['displayed_title']]]
+            worst_data.append([worst_preview['display_url']])
+            worst_data.append([worst_preview['displayed_description']])
+            
+            worst_table = Table(worst_data, colWidths=[450])
+            worst_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (0, 0), colors.lightblue),  # Title
+                ('BACKGROUND', (0, 1), (0, 1), colors.lightgreen),  # URL
+                ('BACKGROUND', (0, 2), (0, 2), colors.white),  # Description
+                ('TEXTCOLOR', (0, 0), (0, 0), colors.blue),  # Title
+                ('TEXTCOLOR', (0, 1), (0, 1), colors.green),  # URL
+                ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
+                ('TOPPADDING', (0, 0), (0, 2), 6),
+                ('BOTTOMPADDING', (0, 0), (0, 2), 6),
+                ('LEFTPADDING', (0, 0), (0, 2), 10),
+                ('RIGHTPADDING', (0, 0), (0, 2), 10),
+                ('BOX', (0, 0), (0, 2), 1, colors.grey)
+            ]))
+            elements.append(worst_table)
+            elements.append(Paragraph(f"Score: {worst_preview['optimization_score']}/100", styles['Italic']))
+            elements.append(Spacer(1, 20))
+        
+        # Add recommendations
+        if 'recommendations' in preview_data and preview_data['recommendations']:
+            elements.append(Paragraph("SERP Preview Recommendations", styles['Heading2']))
+            
+            for i, rec in enumerate(preview_data['recommendations'][:5]):  # Limit to top 5
+                elements.append(Paragraph(f"{i+1}. {rec['title']}", styles['Heading3']))
+                elements.append(Paragraph(rec['description'], styles['Normal']))
+                elements.append(Paragraph(f"Impact: {rec['impact'].title()}", styles['Italic']))
+                elements.append(Spacer(1, 10))
+            
+            elements.append(Spacer(1, 10))
+    
+    # Add backlink analysis section if available
+    if 'backlink_analysis' in analysis_results:
+        elements.append(Paragraph("Backlink Analysis", styles['Heading1']))
+        
+        backlink_data = analysis_results['backlink_analysis']
+        
+        # Add backlink summary
+        if 'backlink_summary' in backlink_data:
+            summary = backlink_data['backlink_summary']
+            
+            elements.append(Paragraph("Backlink Profile Summary", styles['Heading2']))
+            
+            # Create a table for backlink summary
+            data = [["Metric", "Value"]]
+            
+            if 'total_backlinks' in summary:
+                data.append(["Total Backlinks", f"{summary['total_backlinks']:,}"])
+            
+            if 'total_referring_domains' in summary:
+                data.append(["Total Referring Domains", f"{summary['total_referring_domains']:,}"])
+            
+            if 'backlinks_per_domain' in summary:
+                data.append(["Backlinks per Domain", f"{summary['backlinks_per_domain']:.1f}"])
+            
+            if 'domain_authority' in backlink_data:
+                data.append(["Domain Authority", f"{backlink_data['domain_authority']:.1f}/100"])
+            
+            t = Table(data, colWidths=[200, 300])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Left-align first column
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 20))
+        
+        # Add anchor text distribution
+        if 'anchor_text_analysis' in backlink_data and 'categories' in backlink_data['anchor_text_analysis']:
+            anchor_categories = backlink_data['anchor_text_analysis']['categories']
+            
+            elements.append(Paragraph("Anchor Text Distribution", styles['Heading2']))
+            
+            # Create a table for anchor text categories
+            data = [["Anchor Type", "Percentage"]]
+            
+            for category, percentage in anchor_categories.items():
+                category_name = category.replace('_', ' ').title()
+                data.append([category_name, f"{percentage:.1f}%"])
+            
+            t = Table(data, colWidths=[200, 100])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Left-align first column
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 20))
+        
+        # Add recommendations
+        if 'recommendations' in backlink_data and backlink_data['recommendations']:
+            elements.append(Paragraph("Backlink Recommendations", styles['Heading2']))
+            
+            for i, rec in enumerate(backlink_data['recommendations'][:5]):  # Limit to top 5
+                elements.append(Paragraph(f"{i+1}. {rec['title']}", styles['Heading3']))
+                elements.append(Paragraph(rec['description'], styles['Normal']))
+                elements.append(Paragraph(f"Impact: {rec['impact'].title()}", styles['Italic']))
+                elements.append(Spacer(1, 10))
+            
+            elements.append(Spacer(1, 10))
+    
+    # Add content gap section if available
+    if 'content_gaps' in analysis_results:
+        elements.append(Paragraph("Content Gap Analysis", styles['Heading1']))
+        
+        content_gap_data = analysis_results['content_gaps']
+        
+        # Add gap summary
+        if 'gap_summary' in content_gap_data:
+            summary = content_gap_data['gap_summary']
+            
+            elements.append(Paragraph("Content Gap Summary", styles['Heading2']))
+            
+            # Create a table for gap summary
+            data = [["Metric", "Value"]]
+            
+            if 'total_gaps' in summary:
+                data.append(["Total Content Gaps", str(summary['total_gaps'])])
+            
+            if 'total_opportunities' in summary:
+                data.append(["Content Opportunities", str(summary['total_opportunities'])])
+            
+            if 'competitor_advantage_topics' in summary:
+                data.append(["Competitor Advantage Topics", str(summary['competitor_advantage_topics'])])
+            
+            t = Table(data, colWidths=[200, 300])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Left-align first column
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 20))
+        
+        # Add topic opportunities
+        if 'topic_opportunities' in content_gap_data and content_gap_data['topic_opportunities']:
+            elements.append(Paragraph("Content Opportunities", styles['Heading2']))
+            
+            opportunities = content_gap_data['topic_opportunities'][:5]  # Top 5 opportunities
+            
+            # Create a table for opportunities
+            data = [["Topic", "Related Keywords", "Search Volume", "Opportunity Score"]]
+            
+            for opp in opportunities:
+                topic = opp['topic'] if len(opp['topic']) < 30 else opp['topic'][:27] + "..."
+                keywords = ", ".join(opp['related_keywords'][:3])
+                if len(keywords) > 40:
+                    keywords = keywords[:37] + "..."
+                
+                data.append([
+                    topic,
+                    keywords,
+                    f"{opp['search_volume']:,}",
+                    f"{opp['opportunity_score']:.1f}"
+                ])
+            
+            t = Table(data, colWidths=[120, 180, 100, 100])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Left-align first column
+                ('ALIGN', (1, 0), (1, -1), 'LEFT'),  # Left-align keywords column
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 20))
+        
+        # Add recommendations
+        if 'content_recommendations' in content_gap_data and content_gap_data['content_recommendations']:
+            elements.append(Paragraph("Content Gap Recommendations", styles['Heading2']))
+            
+            for i, rec in enumerate(content_gap_data['content_recommendations'][:5]):  # Limit to top 5
+                elements.append(Paragraph(f"{i+1}. {rec['title']}", styles['Heading3']))
+                elements.append(Paragraph(rec['description'], styles['Normal']))
+                elements.append(Paragraph(f"Impact: {rec['impact'].title()}", styles['Italic']))
+                elements.append(Spacer(1, 10))
+            
+            elements.append(Spacer(1, 10))
     
     # Add final recommendations from AI
     elements.append(Paragraph("Strategic Recommendations", styles['Heading1']))
@@ -516,6 +939,7 @@ def generate_pdf_report(analysis_results: Dict, api_key: str) -> str:
     2. Keyword targeting opportunities
     3. Device-specific optimizations
     4. Geographic targeting
+    5. Technical SEO improvements
     """
     
     try:
