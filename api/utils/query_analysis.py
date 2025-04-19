@@ -6,10 +6,18 @@ from sklearn.cluster import DBSCAN
 import networkx as nx
 from typing import Dict, List, Tuple
 import spacy
+import warnings
 
 class QueryAnalyzer:
     def __init__(self):
-        self.nlp = spacy.load('en_core_web_sm')
+        try:
+            self.nlp = spacy.load('en_core_web_sm')
+        except OSError:
+            warnings.warn(
+                "Spacy model 'en_core_web_sm' not found. Run 'python -m spacy download en_core_web_sm' to install it."
+            )
+            # Create a simple tokenizer as fallback
+            self.nlp = spacy.blank("en")
         
     def analyze_query_patterns(self, df: pd.DataFrame) -> Dict:
         """Analyze search query patterns and relationships."""

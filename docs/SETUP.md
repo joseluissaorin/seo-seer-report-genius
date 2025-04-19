@@ -1,3 +1,4 @@
+
 # SEO Seer: Complete Setup Documentation
 
 ## Table of Contents
@@ -86,6 +87,11 @@ source venv/bin/activate
 ### Installing Python Dependencies
 ```bash
 pip install -r requirements.txt
+```
+
+### Installing spaCy Language Model
+```bash
+python -m spacy download en_core_web_sm
 ```
 
 ### Starting the Backend Server
