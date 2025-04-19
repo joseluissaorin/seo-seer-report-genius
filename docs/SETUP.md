@@ -68,7 +68,7 @@ VITE_API_URL=http://localhost:4568
 npm run dev
 ```
 
-The frontend will be available at http://localhost:8080
+The frontend will be available at http://localhost:4567
 
 ## 4. Backend Setup
 
@@ -105,7 +105,7 @@ The FastAPI backend will be available at http://localhost:4568
 npm run dev
 ```
 
-The frontend will be available at http://localhost:8080
+The frontend will be available at http://localhost:4567
 
 ### API Key Configuration
 1. Get a Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
@@ -121,7 +121,7 @@ server {
 
     # Frontend
     location / {
-        proxy_pass http://localhost:8080;
+        proxy_pass http://localhost:4567;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
@@ -141,7 +141,7 @@ Add the following to your Caddyfile:
 ```caddy
 seo-seer.yourdomain.com {
     # Frontend application
-    reverse_proxy localhost:8080
+    reverse_proxy localhost:4567
 
     # API endpoints
     handle_path /api/* {
@@ -166,7 +166,7 @@ seo-seer.yourdomain.com {
    cd api && source venv/bin/activate && python run_server.py
    ```
 
-2. Access the application at http://localhost:8080
+2. Access the application at http://localhost:4567
 3. Upload GSC data files for analysis
 4. Enter your Gemini API key when prompted
 5. View generated reports and insights
