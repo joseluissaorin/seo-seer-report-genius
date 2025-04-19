@@ -1,50 +1,27 @@
-import React from 'react';
-import { Toaster } from '@/components/ui/sonner';
-import Footer from './components/Footer';
-import { GSCUploader } from './components/GSCUploader';
-import { GSCDownload } from './components/GSCDownload';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { SeerReport } from './components/SeerReport';
-import { useState } from 'react';
-import { ReportData } from './types';
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Index from "./pages/Index";
+import NotFound from "./pages/NotFound";
 
-const App: React.FC = () => {
-  const [reportData, setReportData] = useState<ReportData | null>(null);
+const queryClient = new QueryClient();
 
-  return (
-    <div className="flex flex-col min-h-screen">
-      <main className="flex-grow">
-        <div className="container mx-auto p-4">
-          <h1 className="text-3xl font-semibold mb-4">SEO Seer Report Genius</h1>
-          <Tabs defaultvalue="upload">
-            <TabsList>
-              <TabsTrigger value="upload">1. Upload GSC Data</TabsTrigger>
-              <TabsTrigger value="report" disabled={!reportData}>2. View Report</TabsTrigger>
-            </TabsList>
-            <TabsContent value="upload">
-              <p className='mb-4'>
-                Upload your Google Search Console (GSC) data to generate an SEO report.
-                You can upload multiple CSV files at once.
-              </p>
-              <GSCUploader onUploadComplete={(data: ReportData) => {
-                setReportData(data);
-              }} />
-              <GSCDownload />
-            </TabsContent>
-            <TabsContent value="report">
-              {reportData ? (
-                <SeerReport reportData={reportData} />
-              ) : (
-                <p>No data uploaded yet. Please upload your GSC data to view the report.</p>
-              )}
-            </TabsContent>
-          </Tabs>
-        </div>
-      </main>
-      <Footer />
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
       <Toaster />
-    </div>
-  );
-};
+      <Sonner />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
 export default App;

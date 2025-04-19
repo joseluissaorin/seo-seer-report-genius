@@ -1,3 +1,4 @@
+
 # SEO Seer: Advanced SEO Analysis Tool
 
 SEO Seer is a powerful web application that transforms Google Search Console data into comprehensive SEO insights using AI-powered analysis. Get enterprise-level SEO analytics at a fraction of the cost.
@@ -35,8 +36,8 @@ SEO Seer is a powerful web application that transforms Google Search Console dat
 
 1. **Installation**:
    ```bash
-   git clone https://github.com/joseluissaorin/seo-seer-report-genius.git
-   cd seo-seer-report-genius
+   git clone https://github.com/yourusername/seo-seer.git
+   cd seo-seer
    npm install
    ```
 
@@ -83,7 +84,7 @@ For detailed setup instructions, including reverse proxy configuration and advan
 
 ## Contributing
 
-We welcome contributions! Please read our contributing guidelines and submit pull requests to our [GitHub repository](https://github.com/joseluissaorin/seo-seer-report-genius).
+We welcome contributions! Please read our contributing guidelines and submit pull requests to our repository.
 
 ## Security
 
@@ -93,8 +94,8 @@ We welcome contributions! Please read our contributing guidelines and submit pul
 
 ## License
 
-[MIT License](LICENSE) - Copyright (c) 2025 José Luis Saorín Ferrer
+MIT License - see LICENSE file for details
 
 ## Support
 
-For support, please open an issue in the [GitHub repository](https://github.com/joseluissaorin/seo-seer-report-genius) or contact our support team.
+For support, please open an issue in the GitHub repository or contact our support team.
