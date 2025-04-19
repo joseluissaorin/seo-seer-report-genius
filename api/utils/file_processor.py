@@ -1,7 +1,8 @@
 import pandas as pd
 import logging
-from typing import List, Dict, Union
+from typing import List, Dict, Union, IO
 import re
+from io import BytesIO, StringIO
 
 # Define standard column sets for identification
 QUERY_COLS_BASE = {'query', 'page', 'clicks', 'impressions', 'ctr', 'position'}
@@ -150,8 +151,8 @@ def standardize_column_names(df: pd.DataFrame) -> pd.DataFrame:
         
     return df_copy
 
-def process_csv_files(files: List[Dict[str, Union[str, bytes]]]) -> Dict[str, pd.DataFrame]:
-    """Process multiple CSV files and organize them by type."""
+def process_csv_files(files: List[Dict[str, Union[str, bytes, IO[bytes], IO[str]]]]) -> Dict[str, pd.DataFrame]:
+    """Process multiple CSV files and organize them by type. Accepts bytes, str, or file-like objects."""
     processed_data = {}
     
     for file_info in files:
@@ -163,17 +164,9 @@ def process_csv_files(files: List[Dict[str, Union[str, bytes]]]) -> Dict[str, pd
             continue
             
         try:
-            # Read CSV file using BytesIO if content is bytes
-            from io import BytesIO, StringIO
-            if isinstance(content, bytes):
-                csv_io = BytesIO(content)
-            elif isinstance(content, str):
-                 csv_io = StringIO(content)
-            else:
-                logging.error(f"Unsupported content type for file {filename}: {type(content)}")
-                continue
-
-            df = pd.read_csv(csv_io)
+            # Read CSV directly from content (str, bytes, or file-like)
+            # pandas can handle BytesIO, StringIO, or file paths/objects
+            df = pd.read_csv(content)
             
             # Standardize column names first (handles Spanish/English variations)
             df_standardized = standardize_column_names(df)
@@ -197,6 +190,7 @@ def process_csv_files(files: List[Dict[str, Union[str, bytes]]]) -> Dict[str, pd
             # Log using the original filename if available
             logging.error(f"Error processing file {filename}: {str(e)}")
             # Optionally, re-raise or handle specific exceptions differently
+            # Consider potential decoding errors if bytes are passed without proper encoding
             # raise e 
     
     return processed_data
