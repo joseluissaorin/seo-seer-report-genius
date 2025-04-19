@@ -1,81 +1,102 @@
-import argparse
 import requests
+import argparse
 import os
-import sys
-from pathlib import Path
+import glob
+import logging
 
-def generate_report(csv_file_path: Path, api_key: str, api_endpoint: str, output_dir: Path):
-    """Sends a CSV file to the SEO analysis API and saves the resulting PDF report."""
+# Setup basic logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def generate_report(folder_path: str, api_key: str, output_file: str, api_url: str):
+    """
+    Finds CSV files in a folder, sends them to the SEO analysis API,
+    and saves the resulting PDF report.
+    """
+    
+    # 1. Validate folder path
+    if not os.path.isdir(folder_path):
+        logging.error(f"Error: Folder not found at '{folder_path}'")
+        return
+
+    # 2. Find CSV files
+    csv_pattern = os.path.join(folder_path, '*.csv')
+    csv_files = glob.glob(csv_pattern)
+
+    if not csv_files:
+        logging.error(f"Error: No CSV files found in '{folder_path}'")
+        return
+        
+    logging.info(f"Found {len(csv_files)} CSV files to process: {', '.join([os.path.basename(f) for f in csv_files])}")
+
+    # 3. Prepare files payload for the request
+    files_payload = []
     try:
-        with open(csv_file_path, 'rb') as f:
-            files = {'file': (csv_file_path.name, f, 'text/csv')}
-            data = {'api_key': api_key}
-            
-            print(f"Sending {csv_file_path.name} to {api_endpoint}...")
-            response = requests.post(api_endpoint, files=files, data=data, timeout=300) # 5 min timeout
+        for file_path in csv_files:
+            filename = os.path.basename(file_path)
+            # Read file as bytes, let the API handle decoding
+            files_payload.append(('files', (filename, open(file_path, 'rb'), 'text/csv'))) 
+            logging.debug(f"Prepared file for upload: {filename}")
+    except Exception as e:
+        logging.error(f"Error opening file {file_path}: {str(e)}")
+        # Ensure already opened files are closed in case of error
+        for _, file_tuple in files_payload:
+            file_tuple[1].close()
+        return
 
-            response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
+    # 4. Prepare data payload
+    data_payload = {'api_key': api_key}
+    logging.info(f"Sending request to API endpoint: {api_url}")
 
-            # Save the PDF report
-            output_filename = output_dir / f"{csv_file_path.stem}_report.pdf"
-            with open(output_filename, 'wb') as out_f:
-                out_f.write(response.content)
-            print(f"Successfully generated report: {output_filename}")
-            return True
+    # 5. Make the POST request
+    try:
+        response = requests.post(api_url, files=files_payload, data=data_payload, timeout=300) # Increased timeout for potentially long analysis
+
+        # Ensure files are closed after the request is made
+        for _, file_tuple in files_payload:
+             file_tuple[1].close()
+             
+        logging.info(f"Received response with status code: {response.status_code}")
+
+        # 6. Handle the response
+        if response.status_code == 200 and response.headers.get('content-type') == 'application/pdf':
+            try:
+                with open(output_file, 'wb') as f:
+                    f.write(response.content)
+                logging.info(f"Successfully saved report to '{output_file}'")
+            except Exception as e:
+                logging.error(f"Error saving PDF file '{output_file}': {str(e)}")
+        else:
+            logging.error(f"API request failed. Status Code: {response.status_code}")
+            try:
+                # Try to decode error message from API if possible
+                error_detail = response.json().get('detail', response.text) 
+                logging.error(f"Error Detail: {error_detail}")
+            except Exception: # If response is not JSON or can't be decoded
+                logging.error(f"Error Detail: {response.text[:500]}...") # Log first 500 chars
 
     except requests.exceptions.RequestException as e:
-        print(f"Error sending request for {csv_file_path.name}: {e}", file=sys.stderr)
-        if hasattr(e, 'response') and e.response is not None:
-            try:
-                error_detail = e.response.json()
-                print(f"API Error Detail: {error_detail.get('detail', e.response.text)}", file=sys.stderr)
-            except requests.exceptions.JSONDecodeError:
-                print(f"API Error Response (non-JSON): {e.response.text}", file=sys.stderr)
-        return False
-    except Exception as e:
-        print(f"An unexpected error occurred while processing {csv_file_path.name}: {e}", file=sys.stderr)
-        return False
+        logging.error(f"API request failed: {str(e)}")
+        # Ensure files are closed if the request itself fails
+        for _, file_tuple in files_payload:
+             if not file_tuple[1].closed:
+                 file_tuple[1].close()
 
-def main():
-    parser = argparse.ArgumentParser(description="Generate SEO reports by sending CSV files to the SEO Seer API.")
-    parser.add_argument("csv_folder", help="Path to the folder containing CSV files.")
-    parser.add_argument("api_key", help="Your Google Gemini API Key.")
-    parser.add_argument("-e", "--endpoint", default="http://127.0.0.1:4568/analyze-seo", 
-                        help="The URL endpoint of the running SEO analysis API.")
-    parser.add_argument("-o", "--output", default="reports", 
-                        help="Directory to save the generated PDF reports.")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Generate SEO Analysis Report by sending CSV files to the API.")
+    
+    parser.add_argument("-f", "--folder", 
+                        required=True, 
+                        help="Path to the folder containing the CSV files.")
+    parser.add_argument("-k", "--api-key", 
+                        required=True, 
+                        help="Your Google Gemini API Key.")
+    parser.add_argument("-o", "--output-file", 
+                        default="seo_analysis_report_client.pdf", 
+                        help="Name for the output PDF file (default: seo_analysis_report_client.pdf).")
+    parser.add_argument("-u", "--api-url", 
+                        default="http://127.0.0.1:4568/analyze-seo", 
+                        help="URL of the running SEO analysis API endpoint (default: http://127.0.0.1:4568/analyze-seo).")
 
     args = parser.parse_args()
 
-    csv_folder_path = Path(args.csv_folder)
-    output_dir_path = Path(args.output)
-    api_key = args.api_key
-    api_endpoint = args.endpoint
-
-    if not csv_folder_path.is_dir():
-        print(f"Error: Folder not found at {csv_folder_path}", file=sys.stderr)
-        sys.exit(1)
-
-    # Create output directory if it doesn't exist
-    output_dir_path.mkdir(parents=True, exist_ok=True)
-
-    print(f"Processing CSV files from: {csv_folder_path}")
-    print(f"Saving reports to: {output_dir_path}")
-    print(f"Using API endpoint: {api_endpoint}")
-
-    processed_count = 0
-    error_count = 0
-
-    for item in csv_folder_path.iterdir():
-        if item.is_file() and item.suffix.lower() == '.csv':
-            if generate_report(item, api_key, api_endpoint, output_dir_path):
-                processed_count += 1
-            else:
-                error_count += 1
-
-    print("\nProcessing complete.")
-    print(f"Successfully generated reports: {processed_count}")
-    print(f"Failed reports: {error_count}")
-
-if __name__ == "__main__":
-    main() 
+    generate_report(args.folder, args.api_key, args.output_file, args.api_url) 

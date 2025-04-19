@@ -5,8 +5,12 @@ import re
 from io import BytesIO, StringIO
 
 # Define standard column sets for identification
-QUERY_COLS_BASE = {'query', 'page', 'clicks', 'impressions', 'ctr', 'position'}
-PAGE_COLS_BASE = {'page', 'clicks', 'impressions', 'ctr', 'position'}
+METRIC_COLS = {'clicks', 'impressions', 'ctr', 'position'}
+QUERY_COLS_BASE = {'query', 'page'}.union(METRIC_COLS)
+PAGE_COLS_BASE = {'page'}.union(METRIC_COLS)
+DEVICE_COLS_BASE = {'device'}.union(METRIC_COLS)
+COUNTRY_COLS_BASE = {'country'}.union(METRIC_COLS)
+DATE_COLS_BASE = {'date'}.union(METRIC_COLS)
 SERP_COLS_BASE = {'feature', 'query', 'position', 'url'} # Note: 'url' maps to 'page' later
 
 # Define Spanish column equivalents
@@ -37,38 +41,49 @@ def identify_file_type(df: pd.DataFrame) -> str:
     """Identify the type of CSV file based on its columns (handles English & Spanish)."""
     standard_cols = get_standardized_columns(df)
     
-    # Check for query-based types first (most specific)
+    # --- Prioritize Checks ---
+    # 1. Full Query-based types (most specific)
     if QUERY_COLS_BASE.issubset(standard_cols):
+        # These files have query, page, metrics AND a dimension
         if 'device' in standard_cols:
-            return 'devices'
+            return 'devices' # Or potentially a more specific name if needed
         elif 'country' in standard_cols:
             return 'countries'
         elif 'date' in standard_cols:
             return 'dates'
         else:
-            # Base query type
-            return 'queries'
+            # Has query, page, and metrics, but no extra dimension
+            return 'queries' # Base query/page performance
             
-    # Check for page-based type
+    # 2. Dimension-specific types (without query/page)
+    # Check these *before* the simpler page/query types
+    elif DEVICE_COLS_BASE.issubset(standard_cols):
+        return 'devices' # Only device + metrics
+    elif COUNTRY_COLS_BASE.issubset(standard_cols):
+        return 'countries' # Only country + metrics
+    elif DATE_COLS_BASE.issubset(standard_cols):
+        return 'dates' # Only date + metrics
+
+    # 3. Simpler Page-based type (without query)
     elif PAGE_COLS_BASE.issubset(standard_cols):
-        return 'pages'
+        return 'pages' # Only page + metrics
         
-    # Check for SERP features (needs specific Spanish mapping check)
+    # 4. SERP features
     elif SERP_COLS_BASE.issubset(standard_cols):
          return 'serp_features'
          
-    # Check for other known types (add more as needed)
+    # 5. Other specific types
     elif {'url', 'title', 'meta_description'}.issubset(standard_cols):
         return 'meta_data'
     elif {'url', 'mobile_usability', 'mobile_friendly_score'}.issubset(standard_cols):
         return 'mobile'
     elif {'url', 'backlinks', 'domain_authority'}.issubset(standard_cols):
         return 'backlinks'
-    # Check for the Filtros.csv format - let's classify it for now
     elif {'filter', 'comparison', 'value'}.issubset(standard_cols):
-        return 'filters' # Or handle as 'unknown' if preferred
+        return 'filters'
+        
+    # 6. Fallback Unknown
     else:
-        # Log the columns for debugging unknown types
         logging.warning(f"Unknown file type. Standardized columns found: {standard_cols}")
         return 'unknown'
 

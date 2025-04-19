@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, Form, HTTPException
+from fastapi import FastAPI, UploadFile, Form, HTTPException, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import pandas as pd
@@ -90,18 +90,43 @@ app.add_middleware(
 )
 
 @app.post("/analyze-seo")
-async def analyze_seo(file: UploadFile, api_key: str = Form(...)):
+async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(...)):
+    logger.info(f"Received /analyze-seo request with {len(files)} file(s).")
+    processed_files_list = []
+    filenames = [] # Keep track of original filenames
+    
+    if not files:
+        logger.error("No files uploaded.")
+        raise HTTPException(status_code=400, detail="No files uploaded.")
+
+    for file in files:
+        try:
+            content = await file.read()
+            # Attempt to decode as UTF-8, replace errors to avoid crashes
+            # Using BytesIO allows pandas to handle encoding detection potentially better
+            processed_files_list.append({
+                'filename': file.filename,
+                'content': io.BytesIO(content) # Pass BytesIO directly
+            })
+            filenames.append(file.filename)
+            logger.info(f"Successfully read file: {file.filename}")
+        except Exception as e:
+            logger.error(f"Error reading file {file.filename}: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Error reading file {file.filename}: {str(e)}")
+        finally:
+            await file.close() # Ensure file handles are closed
+
     try:
-        # Process uploaded file
-        content = await file.read()
-        processed_files = [{
-            'filename': file.filename,
-            'content': io.StringIO(content.decode('utf-8', errors='replace'))
-        }]
-        
         # Organize files by type
-        data_frames = process_csv_files(processed_files)
+        logger.info(f"Processing {len(processed_files_list)} files...")
+        data_frames = process_csv_files(processed_files_list)
+        logger.info(f"Processed data types: {list(data_frames.keys())}")
         
+        if not data_frames:
+             logger.warning("No processable data found in the uploaded files.")
+             # Depending on desired behavior, could raise HTTPException or return empty/error report
+             raise HTTPException(status_code=400, detail="No processable data found in the uploaded CSV files.")
+
         # Initialize analyzers
         query_analyzer = QueryAnalyzer()
         keyword_researcher = KeywordResearcher()
@@ -110,351 +135,518 @@ async def analyze_seo(file: UploadFile, api_key: str = Form(...)):
         
         # Perform analyses
         analysis_results = {}
+        visualization_paths = {} # Store paths to generated images
         
-        # Query analysis if available
-        if 'queries' in data_frames:
-            queries_df = data_frames['queries']
+        # --- Conditional Analysis --- 
+        # Note: We should review dependencies between analyses carefully.
+        # Some analyses might depend on results from others (e.g., content gap needs competitor data)
+        
+        # Query, Keyword, Competitor, Cannibalization, SERP Features, SERP Preview, Content Gap (often related)
+        if 'queries' in data_frames or 'pages' in data_frames: # Broaden trigger slightly?
+            queries_df = data_frames.get('queries') # Use .get for safety
+            pages_df = data_frames.get('pages')
             
-            # Base query analysis
-            analysis_results['query_analysis'] = query_analyzer.analyze_query_patterns(queries_df)
-            analysis_results['query_visualizations'] = create_query_visualizations(
-                analysis_results['query_analysis']
-            )
+            # Combine queries and pages if both exist for richer context? Requires review of analyzers.
+            # combined_df = pd.concat([queries_df, pages_df], ignore_index=True) if queries_df is not None and pages_df is not None else queries_df if queries_df is not None else pages_df
+
+            if queries_df is not None:
+                logger.info("Performing Query Analysis...")
+                analysis_results['query_analysis'] = query_analyzer.analyze_query_patterns(queries_df)
+                vis_path = create_query_visualizations(analysis_results['query_analysis'])
+                if vis_path: visualization_paths['query_visualizations'] = vis_path
+                
+                top_queries = queries_df.sort_values('impressions', ascending=False)['query'].head(10).tolist()
+                
+                logger.info("Performing Keyword Research...")
+                try:
+                    keyword_data = {}
+                    trends = keyword_researcher.research_keyword_trends(top_queries[:5])
+                    keyword_data['trend_data'] = trends
+                    if top_queries:
+                        suggestions = keyword_researcher.get_keyword_suggestions(top_queries[0])
+                        keyword_data['related_queries'] = {top_queries[0]: {'top': suggestions}}
+                    difficulties = keyword_researcher.analyze_keyword_difficulty(top_queries[:5])
+                    keyword_data['difficulty'] = difficulties
+                    analysis_results['keyword_research'] = keyword_data
+                    vis_path = create_keyword_research_visualizations(keyword_data)
+                    if vis_path: visualization_paths['keyword_visualizations'] = vis_path
+                except Exception as e:
+                    logger.error(f"Keyword research error: {str(e)}")
+
+                logger.info("Performing Competitor Analysis...")
+                try:
+                    competitor_data = {}
+                    competitors = competitor_analyzer.identify_competitors(top_queries)
+                    competitor_data['competitors'] = competitors
+                    if competitors:
+                        top_competitor = list(competitors.keys())[0]
+                        competitor_url = f"https://{top_competitor}"
+                        content_analysis = competitor_analyzer.analyze_competitor_content(competitor_url)
+                        competitor_data['content_analysis'] = content_analysis
+                        ranking_comparison = competitor_analyzer.compare_rankings(top_queries[:5], top_competitor)
+                        competitor_data['ranking_comparison'] = ranking_comparison
+                    analysis_results['competitor_analysis'] = competitor_data
+                    vis_path = create_competitor_visualizations(competitor_data)
+                    if vis_path: visualization_paths['competitor_visualizations'] = vis_path
+                except Exception as e:
+                    logger.error(f"Competitor analysis error: {str(e)}")
+
+                # Cannibalization needs careful review of its input requirements
+                logger.info("Performing Keyword Cannibalization Detection...")
+                try:
+                    # Assuming it primarily needs query/page data
+                    cannibalization_results = detect_keyword_cannibalization(data_frames)
+                    analysis_results['keyword_cannibalization'] = cannibalization_results
+                    vis_path = create_cannibalization_visualizations(cannibalization_results)
+                    if vis_path: visualization_paths['cannibalization_visualizations'] = vis_path
+                except Exception as e:
+                    logger.error(f"Cannibalization analysis error: {str(e)}")
             
-            # Extract top queries for additional analysis
-            top_queries = queries_df.sort_values('impressions', ascending=False)['query'].head(10).tolist()
-            
-            # Add keyword research
+            # Content Gap Analysis (Depends on Competitor Analysis results)
+            if 'competitor_analysis' in analysis_results:
+                 logger.info("Performing Content Gap Analysis...")
+                 try:
+                     content_gaps = analyze_content_gaps(data_frames, analysis_results.get('competitor_analysis'))
+                     analysis_results['content_gaps'] = content_gaps
+                     vis_path = create_content_gap_visualizations(content_gaps)
+                     if vis_path: visualization_paths['content_gap_visualizations'] = vis_path
+                 except Exception as e:
+                    logger.error(f"Content gap analysis error: {str(e)}")
+
+        # SERP Features (May exist independently or with queries/pages)
+        if 'serp_features' in data_frames:
+            logger.info("Performing SERP Feature Analysis...")
             try:
-                keyword_data = {}
-                
-                # Research trends for top queries
-                trends = keyword_researcher.research_keyword_trends(top_queries[:5])
-                keyword_data['trend_data'] = trends
-                
-                # Get keyword suggestions for the top query
-                if top_queries:
-                    suggestions = keyword_researcher.get_keyword_suggestions(top_queries[0])
-                    keyword_data['related_queries'] = {top_queries[0]: {'top': suggestions}}
-                
-                # Estimate keyword difficulty
-                difficulties = keyword_researcher.analyze_keyword_difficulty(top_queries[:5])
-                keyword_data['difficulty'] = difficulties
-                
-                analysis_results['keyword_research'] = keyword_data
-                analysis_results['keyword_visualizations'] = create_keyword_research_visualizations(keyword_data)
+                serp_features_df = data_frames['serp_features']
+                serp_analysis = analyze_serp_features(serp_features_df) # Adjust function if it needs more context
+                analysis_results['serp_features'] = serp_analysis
+                vis_path = create_serp_feature_visualizations(serp_analysis)
+                if vis_path: visualization_paths['serp_visualizations'] = vis_path
             except Exception as e:
-                print(f"Keyword research error: {str(e)}")
-            
-            # Add competitor analysis
+                logger.error(f"SERP feature analysis error: {str(e)}")
+
+        # SERP Preview (Needs pages/URLs, potentially from multiple types?)
+        # Let's assume it primarily uses 'pages' or 'queries' df for URLs
+        page_urls_available = False
+        if 'pages' in data_frames and not data_frames['pages'].empty:
+             page_urls_available = True
+        elif 'queries' in data_frames and 'page' in data_frames['queries'].columns and not data_frames['queries'].empty:
+             page_urls_available = True
+        # Add other potential sources like 'serp_features' if relevant
+        
+        if page_urls_available:
+            logger.info("Generating SERP Previews...")
             try:
-                competitor_data = {}
-                
-                # Identify competitors based on top queries
-                competitors = competitor_analyzer.identify_competitors(top_queries)
-                competitor_data['competitors'] = competitors
-                
-                # If we have competitors, analyze the top one
-                if competitors:
-                    top_competitor = list(competitors.keys())[0]
-                    competitor_url = f"https://{top_competitor}"
-                    
-                    # Analyze competitor content
-                    content_analysis = competitor_analyzer.analyze_competitor_content(competitor_url)
-                    competitor_data['content_analysis'] = content_analysis
-                    
-                    # Compare rankings
-                    ranking_comparison = competitor_analyzer.compare_rankings(top_queries[:5], top_competitor)
-                    competitor_data['ranking_comparison'] = ranking_comparison
-                
-                analysis_results['competitor_analysis'] = competitor_data
-                analysis_results['competitor_visualizations'] = create_competitor_visualizations(competitor_data)
-            except Exception as e:
-                print(f"Competitor analysis error: {str(e)}")
-            
-            # Add SEO Health Score
-            try:
-                health_score = seo_health_analyzer.calculate_health_score(data_frames)
-                analysis_results['seo_health'] = health_score
-                analysis_results['seo_health_visualizations'] = create_seo_health_visualizations(health_score)
-            except Exception as e:
-                print(f"SEO Health analysis error: {str(e)}")
-            
-            # Add Keyword Cannibalization Detection
-            try:
-                cannibalization_results = detect_keyword_cannibalization(data_frames)
-                analysis_results['keyword_cannibalization'] = cannibalization_results
-                analysis_results['cannibalization_visualizations'] = create_cannibalization_visualizations(cannibalization_results)
-            except Exception as e:
-                print(f"Cannibalization analysis error: {str(e)}")
-            
-            # Add SERP Feature Analysis
-            try:
-                serp_features = analyze_serp_features(data_frames)
-                analysis_results['serp_features'] = serp_features
-                analysis_results['serp_visualizations'] = create_serp_feature_visualizations(serp_features)
-            except Exception as e:
-                print(f"SERP feature analysis error: {str(e)}")
-                
-            # Add SERP Preview Generator
-            try:
+                # Pass the combined dict; the function should extract needed URLs
                 serp_previews = generate_serp_previews(data_frames)
                 analysis_results['serp_previews'] = serp_previews
-                analysis_results['serp_preview_visualizations'] = create_serp_preview_visualizations(serp_previews)
+                vis_path = create_serp_preview_visualizations(serp_previews)
+                if vis_path: visualization_paths['serp_preview_visualizations'] = vis_path
             except Exception as e:
-                print(f"SERP preview error: {str(e)}")
-                
-            # Add Backlink Analysis
-            try:
-                backlink_data = analyze_backlinks(data_frames)
-                analysis_results['backlink_analysis'] = backlink_data
-                analysis_results['backlink_visualizations'] = create_backlink_visualizations(backlink_data)
-            except Exception as e:
-                print(f"Backlink analysis error: {str(e)}")
-                
-            # Add Content Gap Analysis
-            try:
-                content_gaps = analyze_content_gaps(data_frames, analysis_results.get('competitor_analysis', None))
-                analysis_results['content_gaps'] = content_gaps
-                analysis_results['content_gap_visualizations'] = create_content_gap_visualizations(content_gaps)
-            except Exception as e:
-                print(f"Content gap analysis error: {str(e)}")
-        
-        # Device analysis if available
+                logger.error(f"SERP preview error: {str(e)}")
+
+        # Device analysis
         if 'devices' in data_frames:
-            analysis_results['device_analysis'] = analyze_device_data(
-                data_frames['devices']
-            )
-            analysis_results['device_visualizations'] = create_device_visualizations(
-                analysis_results['device_analysis']
-            )
-            
-            # Add Mobile Optimization Analysis
+            logger.info("Performing Device Analysis...")
+            analysis_results['device_analysis'] = analyze_device_data(data_frames['devices'])
+            vis_path = create_device_visualizations(analysis_results['device_analysis'])
+            if vis_path: visualization_paths['device_visualizations'] = vis_path
+
+        # Mobile Optimization (Often needs 'mobile' specific data, but might relate to device traffic)
+        if 'mobile' in data_frames:
+            logger.info("Performing Mobile Optimization Analysis...")
             try:
-                mobile_optimization = analyze_mobile_friendliness(data_frames)
+                mobile_df = data_frames['mobile']
+                mobile_optimization = analyze_mobile_friendliness(mobile_df) # Assuming it takes the mobile df
                 analysis_results['mobile_optimization'] = mobile_optimization
-                analysis_results['mobile_visualizations'] = create_mobile_visualizations(mobile_optimization)
+                vis_path = create_mobile_visualizations(mobile_optimization)
+                if vis_path: visualization_paths['mobile_visualizations'] = vis_path
             except Exception as e:
-                print(f"Mobile optimization analysis error: {str(e)}")
-        
-        # Temporal analysis if available
+                logger.error(f"Mobile optimization analysis error: {str(e)}")
+        elif 'devices' in data_frames:
+             # Fallback: Maybe infer some mobile insights from device distribution?
+             logger.info("Mobile data not found, attempting basic insights from device data.")
+             # Add placeholder or basic analysis based on device df if desired
+             pass 
+
+        # Temporal analysis
         if 'dates' in data_frames:
-            analysis_results['temporal_analysis'] = analyze_temporal_patterns(
-                data_frames['dates']
-            )
-            analysis_results['temporal_visualizations'] = create_temporal_visualizations(
-                analysis_results['temporal_analysis']
-            )
+            logger.info("Performing Temporal Analysis...")
+            analysis_results['temporal_analysis'] = analyze_temporal_patterns(data_frames['dates'])
+            vis_path = create_temporal_visualizations(analysis_results['temporal_analysis'])
+            if vis_path: visualization_paths['temporal_visualizations'] = vis_path
         
-        # Geographic analysis if available
+        # Geographic analysis
         if 'countries' in data_frames:
-            analysis_results['geographic_analysis'] = analyze_geographic_data(
-                data_frames['countries']
-            )
-            analysis_results['geographic_visualizations'] = create_geographic_visualizations(
-                analysis_results['geographic_analysis']
-            )
-        
-        # Generate comprehensive report
-        report_path = generate_pdf_report(analysis_results, api_key)
-        
-        return FileResponse(
-            path=report_path,
-            filename="seo_analysis_report.pdf",
-            media_type="application/pdf"
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            logger.info("Performing Geographic Analysis...")
+            analysis_results['geo_analysis'] = analyze_geographic_data(data_frames['countries'])
+            vis_path = create_geographic_visualizations(analysis_results['geo_analysis'])
+            if vis_path: visualization_paths['geo_visualizations'] = vis_path
+            
+        # Backlink Analysis
+        if 'backlinks' in data_frames:
+            logger.info("Performing Backlink Analysis...")
+            try:
+                backlinks_df = data_frames['backlinks']
+                backlink_data = analyze_backlinks(backlinks_df) # Assuming it takes the backlinks df
+                analysis_results['backlink_analysis'] = backlink_data
+                vis_path = create_backlink_visualizations(backlink_data)
+                if vis_path: visualization_paths['backlink_visualizations'] = vis_path
+            except Exception as e:
+                logger.error(f"Backlink analysis error: {str(e)}")
 
-def generate_pdf_report(analysis_results: Dict, api_key: str) -> str:
-    """Generate a comprehensive PDF report from the analysis results."""
-    # Create a temporary file for the PDF
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
-    temp_file.close()
+        # SEO Health Score (Needs multiple data types? Check function)
+        # Let's assume it needs a variety, calculate if any relevant data exists
+        if any(key in data_frames for key in ['queries', 'pages', 'devices', 'countries', 'dates', 'mobile', 'backlinks']):
+            logger.info("Calculating SEO Health Score...")
+            try:
+                # Pass the whole dictionary, let the function handle it
+                health_score = seo_health_analyzer.calculate_health_score(data_frames)
+                analysis_results['seo_health'] = health_score
+                vis_path = create_seo_health_visualizations(health_score)
+                if vis_path: visualization_paths['seo_health_visualizations'] = vis_path
+            except Exception as e:
+                logger.error(f"SEO Health analysis error: {str(e)}")
+        
+        logger.info(f"Analysis complete. Results keys: {list(analysis_results.keys())}")
+        logger.info(f"Visualization paths: {list(visualization_paths.keys())}")
+
+        # Combine analysis text results and visualization paths for the report generator
+        report_data = {**analysis_results, **visualization_paths}
+
+        # Generate PDF report
+        logger.info("Generating PDF report...")
+        pdf_path = generate_pdf_report(report_data, api_key, data_frames)
+        logger.info(f"PDF report generated at: {pdf_path}")
+
+        # Return PDF report
+        return FileResponse(pdf_path, media_type='application/pdf', filename='seo_analysis_report.pdf')
+
+    except HTTPException as http_exc:
+        logger.error(f"HTTP Exception: {http_exc.status_code} - {http_exc.detail}")
+        raise http_exc # Re-raise HTTP exceptions
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred: {str(e)}") # Log full traceback
+        raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+    finally:
+        # Clean up temporary image files if visualization_paths was populated
+        for path in visualization_paths.values():
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                    logger.info(f"Cleaned up temp image: {path}")
+                except Exception as e:
+                    logger.error(f"Error cleaning up temp file {path}: {str(e)}")
+
+# --- Report Generation Function --- 
+def generate_pdf_report(report_data: Dict, api_key: str, data_frames: Dict[str, pd.DataFrame]) -> str:
+    """Generate a PDF report conditionally based on available analysis data."""
+    logger.info("Generating PDF report with available data types: %s", list(data_frames.keys()))
     
-    # Create the PDF document
-    doc = SimpleDocTemplate(temp_file.name, pagesize=letter)
-    styles = getSampleStyleSheet()
-    elements = []
-    
-    # Add title
-    title_style = styles['Title']
-    elements.append(Paragraph("SEO Seer Pro Analysis Report", title_style))
-    elements.append(Spacer(1, 20))
-    
-    # Add introduction
-    elements.append(Paragraph("Executive Summary", styles['Heading1']))
-    
-    # Generate executive summary with Gemini AI
+    # Configure Gemini (keep existing try/except block)
     try:
-        logging.info("Configuring Gemini API...")
-        # Configure Gemini API with the provided key
+        logger.info("Configuring Gemini API...")
         genai.configure(api_key=api_key)
-        logging.info("Gemini API configured successfully.")
-
-        # Set up generation configuration
-        generation_config = {
-            "temperature": 1,
-            "top_p": 0.95,
-            "top_k": 64,
-            "max_output_tokens": 65536,
-        }
-
-        logging.info(f"Creating Gemini model: gemini-2.5-pro-preview-03-25")
-        # Create the model with appropriate parameters
-        model = genai.GenerativeModel(
-            model_name="gemini-2.5-pro-preview-03-25",
-            generation_config=generation_config
-        )
-        logging.info("Gemini model created.")
-
-        # Prepare a simplified version of the analysis results (to avoid token limits)
-        simplified_results = {}
-        for key, value in analysis_results.items():
-            if key.endswith('_visualizations'):
-                continue  # Skip visualization data
-            if isinstance(value, pd.DataFrame):
-                simplified_results[key] = value.to_dict(orient='records')[:10]
-            elif isinstance(value, dict):
-                simplified_results[key] = {k: str(v)[:1000] if isinstance(v, (list, dict)) else v for k, v in value.items()}
-            else:
-                simplified_results[key] = str(value)[:1000]
-            
-        # Create prompt for the summary
-        summary_prompt = "Create a concise executive summary for an SEO analysis report based on the following data: " + json.dumps(simplified_results, default=str)[:7000] + "\n\nFocus on key insights, trends, and actionable recommendations. Keep it under 300 words."
-        logging.info(f"Prepared summary prompt (length: {len(summary_prompt)} chars). Starting chat...")
-
-        # Create a chat session
-        chat_session = model.start_chat(history=[])
-
-        logging.info("Sending message to Gemini for summary...")
-        # Generate the summary
-        response = chat_session.send_message(summary_prompt)
-        summary_text = response.text
-        logging.info("Received summary from Gemini.")
-
-        # Add the generated summary to the PDF
-        elements.append(Paragraph(summary_text, styles['Normal']))
+        # Consider allowing model selection via config or request parameter later
+        model = genai.GenerativeModel('gemini-1.5-pro-latest') 
+        logger.info("Gemini API configured successfully.")
     except Exception as e:
-        # Handle any errors with the Gemini API
-        logging.exception("Failed to generate AI summary. Error details:") # Use logging.exception to include traceback
-        elements.append(Paragraph("Unable to generate AI summary. Please check your API key or try again later.", styles['Normal']))
+        logger.error(f"Failed to configure Gemini API: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to configure Gemini API: {str(e)}")
+
+    # PDF Setup
+    pdf_buffer = BytesIO()
+    # Use a known location for easier debugging if needed, ensure cleanup
+    pdf_dir = tempfile.gettempdir()
+    # Ensure unique filenames if running concurrently, e.g., using uuid
+    import uuid
+    pdf_filename = f"seo_analysis_report_{uuid.uuid4()}.pdf"
+    pdf_path = os.path.join(pdf_dir, pdf_filename)
     
-    elements.append(Spacer(1, 20))
-    
-    # Add SEO Health Score section if available
-    if 'seo_health' in analysis_results:
-        elements.append(Paragraph("SEO Health Score", styles['Heading1']))
-        
-        health_data = analysis_results['seo_health']
-        overall_score = health_data.get('overall_score', 0)
-        
-        # Add overall score
-        elements.append(Paragraph(f"Overall Score: {overall_score}/100", styles['Heading2']))
-        
-        # Add score explanation based on range
-        score_explanation = ""
-        if overall_score >= 80:
-            score_explanation = "Your site has excellent SEO health. Continue maintaining best practices."
-        elif overall_score >= 60:
-            score_explanation = "Your site has good SEO health with room for improvement in specific areas."
-        elif overall_score >= 40:
-            score_explanation = "Your site requires significant SEO improvements to compete effectively."
-        else:
-            score_explanation = "Your site has critical SEO issues that need immediate attention."
-        
-        elements.append(Paragraph(score_explanation, styles['Normal']))
-        elements.append(Spacer(1, 10))
-        
-        # Add component scores table
-        if 'component_scores' in health_data:
-            elements.append(Paragraph("Component Scores", styles['Heading2']))
-            
-            component_scores = health_data['component_scores']
-            
-            # Create a table for component scores
-            data = [["Component", "Score", "Status"]]
-            
-            for component, score in component_scores.items():
-                component_name = component.replace('_', ' ').title()
-                
-                # Determine status based on score
-                status = "Excellent" if score >= 80 else "Good" if score >= 60 else "Needs Improvement" if score >= 40 else "Critical"
-                
-                data.append([component_name, f"{score:.1f}/100", status])
-            
-            t = Table(data, colWidths=[200, 100, 150])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.lavender),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Left-align first column
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
-            elements.append(t)
-            elements.append(Spacer(1, 20))
-        
-        # Add recommendations
-        if 'recommendations' in health_data and health_data['recommendations']:
-            elements.append(Paragraph("Health Score Recommendations", styles['Heading2']))
-            
-            for i, rec in enumerate(health_data['recommendations'][:5]):  # Limit to top 5
-                elements.append(Paragraph(f"{i+1}. {rec['title']}", styles['Heading3']))
-                elements.append(Paragraph(rec['description'], styles['Normal']))
-                elements.append(Spacer(1, 10))
-            
-            elements.append(Spacer(1, 10))
-    
-    # Add final recommendations from AI
-    elements.append(Paragraph("Strategic Recommendations", styles['Heading1']))
-    
+    doc = SimpleDocTemplate(pdf_path, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Custom Styles (Optional - enhance appearance)
+    styles.add(ParagraphStyle(name='Justify', alignment=4)) # TA_JUSTIFY = 4
+    styles.add(ParagraphStyle(name='Code', fontName='Courier', fontSize=9, leading=11))
+
+    # --- Report Header ---
+    story.append(Paragraph("SEO Analysis Report", styles['h1']))
+    story.append(Paragraph(f"Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
+    story.append(Paragraph(f"Data Types Included: {', '.join(sorted(data_frames.keys()))}", styles['Normal']))
+    story.append(Spacer(1, 12))
+
+    # --- Executive Summary (Gemini) ---
+    logger.info("Attempting to generate executive summary...")
+    summary_text = "Summary generation failed or was skipped."
     try:
-        # Create a simplified version for the final recommendations
-        simplified_results = {}
-        for key, value in analysis_results.items():
-            if key.endswith('_visualizations'):
-                continue  # Skip visualization data
-            if isinstance(value, pd.DataFrame):
-                simplified_results[key] = value.to_dict(orient='records')[:10]
-            elif isinstance(value, dict):
-                simplified_results[key] = {k: str(v)[:1000] if isinstance(v, (list, dict)) else v for k, v in value.items()}
-            else:
-                simplified_results[key] = str(value)[:1000]
-            
-        # Create the prompt for final recommendations
-        final_prompt = f"""
-        Based on this comprehensive SEO analysis including keyword research and competitor analysis:
-        {json.dumps(simplified_results, default=str)}
-        
-        Provide 5-7 strategic, actionable recommendations to improve SEO performance.
-        Each recommendation should be specific, measurable, and prioritized.
-        Format each recommendation with a clear action item followed by the expected benefit.
-        Include specific advice about:
-        1. Content optimization based on competitor analysis
-        2. Keyword targeting opportunities
-        3. Device-specific optimizations
-        4. Geographic targeting
-        5. Technical SEO improvements
-        """
-        logging.info(f"Prepared final recommendations prompt (length: {len(final_prompt)} chars). Generating content...")
+        # Build a more informative prompt
+        prompt_parts = [
+            "You are an expert SEO analyst. Analyze the following SEO data extracted from Google Search Console exports and provide a concise executive summary (approx. 3-5 paragraphs).",
+            "Focus on the most impactful insights, key performance indicators (KPIs), significant trends (positive or negative), and actionable recommendations based *only* on the data provided.",
+            "Structure the summary logically, starting with overall performance and then highlighting key areas like queries, pages, devices, etc., if data is available.",
+            "\n--- Available Data Overview ---"
+        ]
+        for key, df in data_frames.items():
+            prompt_parts.append(f"\n*   **{key.replace('_', ' ').title()} Data:** Present ({df.shape[0]} rows). Key columns: {list(df.columns)}")
+            # Optionally add very brief stats like date range if available
+            if 'date' in df.columns:
+                try:
+                    min_date = pd.to_datetime(df['date']).min().strftime('%Y-%m-%d')
+                    max_date = pd.to_datetime(df['date']).max().strftime('%Y-%m-%d')
+                    prompt_parts[-1] += f" (Range: {min_date} to {max_date})"
+                except Exception:
+                    pass # Ignore date parsing errors
 
-        # Generate recommendations
-        final_insights = model.generate_content(final_prompt)
-        logging.info("Received final recommendations from Gemini.")
-        elements.append(Paragraph(final_insights.text, styles['Normal']))
+        prompt_parts.append("\n--- Detailed Analysis Snippets ---")
+        # Include summaries from analysis_results if they exist
+        analysis_summaries_found = False
+        for key, data in report_data.items():
+             # Look for dictionary results containing a 'summary' key
+             if isinstance(data, dict) and 'summary' in data and isinstance(data['summary'], str):
+                 analysis_summaries_found = True
+                 prompt_parts.append(f"\n*   **{key.replace('_', ' ').title()} Analysis Summary:** {data['summary'][:500]}...") # Limit length
+             # Could add top N rows from key dataframes here too if needed, carefully manage prompt size
+
+        if not analysis_summaries_found:
+             prompt_parts.append("\n(No detailed text summaries from automated analysis were provided; base summary on the raw data overview.)")
+
+        prompt_parts.append("\n--- End of Data Context ---")
+        prompt_parts.append("\nPlease generate the executive summary:")
+        
+        full_prompt = "\n".join(prompt_parts)
+        
+        # Limit overall prompt size to avoid issues (adjust limit as needed)
+        max_prompt_length = 30000 # Example limit for Gemini 1.5
+        if len(full_prompt) > max_prompt_length:
+            logger.warning(f"Prompt length ({len(full_prompt)}) exceeds limit ({max_prompt_length}), truncating.")
+            full_prompt = full_prompt[:max_prompt_length]
+            
+        logger.debug(f"Sending final prompt to Gemini (length {len(full_prompt)}):")
+        # logger.debug(full_prompt) # Potentially log full prompt if debugging needed
+
+        response = model.generate_content(full_prompt)
+        # Add error handling for blocked prompts / safety settings
+        if response.prompt_feedback and response.prompt_feedback.block_reason:
+             logger.error(f"Gemini prompt blocked. Reason: {response.prompt_feedback.block_reason}")
+             summary_text = f"Error: Summary generation blocked by safety settings (Reason: {response.prompt_feedback.block_reason})."
+        elif not response.text:
+             logger.error("Gemini response contained no text.")
+             summary_text = "Error: AI model returned an empty response."
+        else:
+            summary_text = response.text
+            logger.info("Successfully received summary from Gemini.")
+            
     except Exception as e:
-        # Handle any errors with the Gemini API
-        logging.exception("Failed to generate AI recommendations. Error details:") # Use logging.exception
-        elements.append(Paragraph("Unable to generate AI recommendations. Please check your API key or try again later.", styles['Normal']))
+        logger.error(f"Gemini API call failed: {str(e)}", exc_info=True) # Include traceback
+        summary_text = f"Error: Could not generate summary using the AI model due to an unexpected error: {str(e)}"
+
+    story.append(Paragraph("Executive Summary", styles['h2']))
+    # Use the Justify style if defined, otherwise Normal
+    summary_style = styles.get('Justify', styles['Normal'])
+    story.append(Paragraph(summary_text.replace('\n', '<br/>'), summary_style))
+    story.append(Spacer(1, 12))
+
+    # --- Helper function to add sections --- 
+    def add_report_section(title, analysis_key, visualization_key=None, data_formatter=None):
+        if analysis_key in report_data:
+            logger.info(f"Adding section: {title}")
+            story.append(Paragraph(title, styles['h2']))
+            data = report_data[analysis_key]
+            
+            # Add textual summary if exists
+            if isinstance(data, dict) and 'summary' in data:
+                story.append(Paragraph(data['summary'].replace('\n', '<br/>'), summary_style))
+                story.append(Spacer(1, 6))
+                
+            # Add specific formatted data using the provided formatter function
+            if data_formatter:
+                 try:
+                     formatted_elements = data_formatter(data)
+                     story.extend(formatted_elements)
+                 except Exception as e:
+                     logger.error(f"Error formatting data for {title}: {str(e)}", exc_info=True)
+                     story.append(Paragraph(f"Error displaying data for {title}.", styles['Normal']))
+
+            # Add visualization if key exists and path is valid
+            if visualization_key and visualization_key in report_data:
+                img_path = report_data[visualization_key]
+                if img_path and os.path.exists(img_path):
+                    logger.info(f"Adding image {img_path} to PDF section {title}.")
+                    try:
+                        img = Image(img_path, width=500, height=250) # Adjust size
+                        img.hAlign = 'CENTER'
+                        story.append(img)
+                        story.append(Spacer(1, 12))
+                    except Exception as e:
+                        logger.error(f"Error adding image {img_path}: {str(e)}")
+                else:
+                    logger.warning(f"Visualization image not found or invalid path: {img_path}")
+            story.append(Spacer(1, 12))
+            return True
+        return False
+
+    # --- Helper function for simple tables --- 
+    def create_simple_table(df: pd.DataFrame, title: str = None):
+        elements = []
+        if title:
+            elements.append(Paragraph(title, styles['h3']))
+        if not df.empty:
+            # Limit columns and rows for display
+            df_display = df.head(15).copy() # Limit rows
+            # Truncate long cell values
+            for col in df_display.select_dtypes(include='object').columns:
+                 df_display[col] = df_display[col].str.slice(0, 100) # Limit string length
+                 
+            table_data = [df_display.columns.to_list()] + df_display.values.tolist()
+            # Basic styling
+            table = Table(table_data, hAlign='LEFT')
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+            elements.append(table)
+            elements.append(Spacer(1, 6))
+        else:
+            elements.append(Paragraph("(No data available for this table)", styles['Normal']))
+        return elements
+
+    # --- Define Data Formatters for specific sections --- 
+    def format_query_data(data):
+        elements = []
+        if isinstance(data, dict):
+            if 'top_queries_by_clicks' in data and isinstance(data['top_queries_by_clicks'], pd.DataFrame):
+                 elements.extend(create_simple_table(data['top_queries_by_clicks'], "Top Queries by Clicks"))
+            if 'top_queries_by_impressions' in data and isinstance(data['top_queries_by_impressions'], pd.DataFrame):
+                 elements.extend(create_simple_table(data['top_queries_by_impressions'], "Top Queries by Impressions"))
+            # Add more tables/paragraphs as needed based on query_analyzer output
+        return elements
+        
+    def format_keyword_research(data):
+        elements = []
+        if isinstance(data, dict):
+             if 'trend_data' in data:
+                 elements.append(Paragraph("Keyword Trends (Sample)", styles['h3']))
+                 # Format trend data - maybe a simple list or small table
+                 elements.append(Paragraph(json.dumps(data['trend_data'], indent=2), styles['Code'])) 
+             if 'related_queries' in data:
+                 elements.append(Paragraph("Related Query Suggestions", styles['h3']))
+                 elements.append(Paragraph(json.dumps(data['related_queries'], indent=2), styles['Code']))
+             if 'difficulty' in data:
+                 elements.append(Paragraph("Keyword Difficulty Analysis", styles['h3']))
+                 elements.append(Paragraph(json.dumps(data['difficulty'], indent=2), styles['Code']))
+        return elements
+        
+    def format_competitor_data(data):
+         elements = []
+         if isinstance(data, dict):
+             if 'competitors' in data:
+                 elements.append(Paragraph("Identified Competitors", styles['h3']))
+                 elements.append(Paragraph(json.dumps(data['competitors'], indent=2), styles['Code']))
+             if 'content_analysis' in data:
+                 elements.append(Paragraph("Top Competitor Content Analysis", styles['h3']))
+                 elements.append(Paragraph(json.dumps(data['content_analysis'], indent=2), styles['Code']))
+             if 'ranking_comparison' in data:
+                 elements.append(Paragraph("Ranking Comparison", styles['h3']))
+                 # Might need a table here if data is structured
+                 elements.append(Paragraph(json.dumps(data['ranking_comparison'], indent=2), styles['Code']))
+         return elements
+
+    def format_seo_health(data):
+        elements = []
+        if isinstance(data, dict):
+            overall_score = data.get('overall_score', 0)
+            elements.append(Paragraph(f"Overall Score: {overall_score:.1f}/100", styles['h3']))
+            # Add score explanation
+            score_explanation = "Excellent" if overall_score >= 80 else "Good" if overall_score >= 60 else "Needs Improvement" if overall_score >= 40 else "Critical"
+            elements.append(Paragraph(f"Assessment: {score_explanation}", styles['Normal']))
+            elements.append(Spacer(1,6))
+            if 'component_scores' in data:
+                 comp_df = pd.DataFrame(list(data['component_scores'].items()), columns=['Component', 'Score'])
+                 comp_df['Component'] = comp_df['Component'].str.replace('_', ' ').str.title()
+                 comp_df['Score'] = comp_df['Score'].round(1)
+                 elements.extend(create_simple_table(comp_df, "Component Scores"))
+            if 'recommendations' in data and data['recommendations']:
+                 elements.append(Paragraph("Recommendations", styles['h3']))
+                 for i, rec in enumerate(data['recommendations'][:5]):
+                     elements.append(Paragraph(f"{i+1}. {rec.get('title', 'Recommendation')}", styles['Normal']))
+                     elements.append(Paragraph(rec.get('description', ''), styles['Definition'])) # Use Definition style
+                     elements.append(Spacer(1, 4))
+        return elements
+        
+    # Add more formatters for device, temporal, geo, mobile, cannibalization, serp features, etc. following the pattern
+    # Example for Device Data
+    def format_device_data(data):
+        elements = []
+        if isinstance(data, dict) and 'device_performance' in data and isinstance(data['device_performance'], pd.DataFrame):
+            elements.extend(create_simple_table(data['device_performance'], "Performance by Device"))
+        # Add more based on device_analysis output structure
+        return elements
+        
+    # Example for Temporal Data
+    def format_temporal_data(data):
+        elements = []
+        if isinstance(data, dict) and 'trend_summary' in data and isinstance(data['trend_summary'], pd.DataFrame):
+             elements.extend(create_simple_table(data['trend_summary'], "Overall Trend Summary"))
+        # Add more based on temporal_analysis output
+        return elements
+        
+    # Example for Geo Data
+    def format_geo_data(data):
+        elements = []
+        if isinstance(data, dict) and 'performance_by_country' in data and isinstance(data['performance_by_country'], pd.DataFrame):
+             elements.extend(create_simple_table(data['performance_by_country'], "Performance by Country (Top 15)"))
+        # Add more based on geo_analysis output
+        return elements
+        
+    def format_generic_data(data):
+        # Fallback formatter for analysis results that are just dicts/strings
+        elements = []
+        if isinstance(data, dict):
+            elements.append(Paragraph(json.dumps(data, indent=2, default=str), styles['Code']))
+        elif isinstance(data, str):
+            elements.append(Paragraph(data.replace('\n', '<br/>'), summary_style))
+        return elements
+
+    # --- Build Report Sections Conditionally ---
+    add_report_section("Query Performance", 'query_analysis', 'query_visualizations', format_query_data)
+    add_report_section("Device Performance", 'device_analysis', 'device_visualizations', format_device_data)
+    add_report_section("Geographic Performance", 'geo_analysis', 'geo_visualizations', format_geo_data)
+    add_report_section("Temporal Trends", 'temporal_analysis', 'temporal_visualizations', format_temporal_data)
+    add_report_section("Keyword Research", 'keyword_research', 'keyword_visualizations', format_keyword_research)
+    add_report_section("Competitor Analysis", 'competitor_analysis', 'competitor_visualizations', format_competitor_data)
+    add_report_section("Content Gaps", 'content_gaps', 'content_gap_visualizations', format_generic_data) # Needs formatter
+    add_report_section("Mobile Friendliness", 'mobile_optimization', 'mobile_visualizations', format_generic_data) # Needs formatter
+    add_report_section("Keyword Cannibalization", 'keyword_cannibalization', 'cannibalization_visualizations', format_generic_data) # Needs formatter
+    add_report_section("SERP Feature Analysis", 'serp_features', 'serp_visualizations', format_generic_data) # Needs formatter
+    add_report_section("SERP Previews", 'serp_previews', 'serp_preview_visualizations', format_generic_data) # Needs formatter
+    add_report_section("Backlink Analysis", 'backlink_analysis', 'backlink_visualizations', format_generic_data) # Needs formatter
+    add_report_section("Overall SEO Health", 'seo_health', 'seo_health_visualizations', format_seo_health)
     
-    # Build the PDF
-    doc.build(elements)
-    
-    return temp_file.name
+    # --- Build PDF --- 
+    logger.info("Building final PDF document...")
+    try:
+        doc.build(story)
+        logger.info(f"PDF document built successfully: {pdf_path}")
+    except Exception as e:
+         logger.error(f"Error building PDF: {str(e)}", exc_info=True)
+         # Clean up the potentially corrupted file
+         if os.path.exists(pdf_path):
+              os.remove(pdf_path)
+         raise HTTPException(status_code=500, detail=f"Error generating PDF report: {str(e)}")
+
+    return pdf_path
 
 @app.get("/")
 async def root():
-    return {"message": "SEO Seer Pro API is running. Use /analyze-seo endpoint to analyze your data."}
+    return {"message": "SEO Seer Report Genius API is running."}
+
+# Optional: Add cleanup for older temp PDF files on startup if needed
