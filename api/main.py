@@ -154,7 +154,7 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
         if not data_frames:
              logger.warning("No processable data found in the uploaded files.")
              raise HTTPException(status_code=400, detail="No processable data found in the uploaded CSV files.")
-
+        
         # Initialize analyzers
         query_analyzer = QueryAnalyzer()
         keyword_researcher = KeywordResearcher()
@@ -174,55 +174,55 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
             if queries_df is not None:
                 logger.info("--- Starting Query Analysis --- Dtypes:")
                 logger.info(f"\n{queries_df.dtypes}")
-                analysis_results['query_analysis'] = query_analyzer.analyze_query_patterns(queries_df)
+            analysis_results['query_analysis'] = query_analyzer.analyze_query_patterns(queries_df)
                 vis_path = create_query_visualizations(analysis_results['query_analysis'])
                 if vis_path: visualization_paths['query_visualizations'] = vis_path
-                
-                top_queries = queries_df.sort_values('impressions', ascending=False)['query'].head(10).tolist()
-                
+            
+            top_queries = queries_df.sort_values('impressions', ascending=False)['query'].head(10).tolist()
+            
                 logger.info("--- Starting Keyword Research --- ")
-                try:
-                    keyword_data = {}
-                    trends = keyword_researcher.research_keyword_trends(top_queries[:5])
-                    keyword_data['trend_data'] = trends
-                    if top_queries:
-                        suggestions = keyword_researcher.get_keyword_suggestions(top_queries[0])
-                        keyword_data['related_queries'] = {top_queries[0]: {'top': suggestions}}
-                    difficulties = keyword_researcher.analyze_keyword_difficulty(top_queries[:5])
-                    keyword_data['difficulty'] = difficulties
-                    analysis_results['keyword_research'] = keyword_data
+            try:
+                keyword_data = {}
+                trends = keyword_researcher.research_keyword_trends(top_queries[:5])
+                keyword_data['trend_data'] = trends
+                if top_queries:
+                    suggestions = keyword_researcher.get_keyword_suggestions(top_queries[0])
+                    keyword_data['related_queries'] = {top_queries[0]: {'top': suggestions}}
+                difficulties = keyword_researcher.analyze_keyword_difficulty(top_queries[:5])
+                keyword_data['difficulty'] = difficulties
+                analysis_results['keyword_research'] = keyword_data
                     vis_path = create_keyword_research_visualizations(keyword_data)
                     if vis_path: visualization_paths['keyword_visualizations'] = vis_path
-                except Exception as e:
+            except Exception as e:
                     logger.error(f"Keyword research error: {str(e)}")
-
+            
                 logger.info("--- Starting Competitor Analysis --- ")
-                try:
-                    competitor_data = {}
-                    competitors = competitor_analyzer.identify_competitors(top_queries)
-                    competitor_data['competitors'] = competitors
-                    if competitors:
-                        top_competitor = list(competitors.keys())[0]
-                        competitor_url = f"https://{top_competitor}"
-                        content_analysis = competitor_analyzer.analyze_competitor_content(competitor_url)
-                        competitor_data['content_analysis'] = content_analysis
-                        ranking_comparison = competitor_analyzer.compare_rankings(top_queries[:5], top_competitor)
-                        competitor_data['ranking_comparison'] = ranking_comparison
-                    analysis_results['competitor_analysis'] = competitor_data
+            try:
+                competitor_data = {}
+                competitors = competitor_analyzer.identify_competitors(top_queries)
+                competitor_data['competitors'] = competitors
+                if competitors:
+                    top_competitor = list(competitors.keys())[0]
+                    competitor_url = f"https://{top_competitor}"
+                    content_analysis = competitor_analyzer.analyze_competitor_content(competitor_url)
+                    competitor_data['content_analysis'] = content_analysis
+                    ranking_comparison = competitor_analyzer.compare_rankings(top_queries[:5], top_competitor)
+                    competitor_data['ranking_comparison'] = ranking_comparison
+                analysis_results['competitor_analysis'] = competitor_data
                     vis_path = create_competitor_visualizations(competitor_data)
                     if vis_path: visualization_paths['competitor_visualizations'] = vis_path
-                except Exception as e:
+            except Exception as e:
                     logger.error(f"Competitor analysis error: {str(e)}")
 
                 logger.info("--- Starting Keyword Cannibalization Detection --- Dtypes:")
                 # Log dtypes of all dataframes as this function takes the dict
                 for name, df_log in data_frames.items(): logger.info(f"Dataframe '{name}':\n{df_log.dtypes}")
-                try:
-                    cannibalization_results = detect_keyword_cannibalization(data_frames)
-                    analysis_results['keyword_cannibalization'] = cannibalization_results
+            try:
+                cannibalization_results = detect_keyword_cannibalization(data_frames)
+                analysis_results['keyword_cannibalization'] = cannibalization_results
                     vis_path = create_cannibalization_visualizations(cannibalization_results)
                     if vis_path: visualization_paths['cannibalization_visualizations'] = vis_path
-                except Exception as e:
+            except Exception as e:
                     logger.error(f"Cannibalization analysis error: {str(e)}")
             
             if 'competitor_analysis' in analysis_results:
@@ -287,7 +287,7 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
         elif 'devices' in data_frames:
              logger.info("Mobile data not found, attempting basic insights from device data.")
              pass 
-
+        
         if 'dates' in data_frames:
             dates_df = data_frames['dates']
             logger.info("--- Starting Temporal Analysis --- Dtypes:")

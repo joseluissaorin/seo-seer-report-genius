@@ -6,17 +6,29 @@ from io import BytesIO, StringIO
 
 # Define standard column sets for identification
 METRIC_COLS = {'clicks', 'impressions', 'ctr', 'position'}
-QUERY_COLS_BASE = {'query', 'page'}.union(METRIC_COLS)
-PAGE_COLS_BASE = {'page'}.union(METRIC_COLS)
-DEVICE_COLS_BASE = {'device'}.union(METRIC_COLS)
-COUNTRY_COLS_BASE = {'country'}.union(METRIC_COLS)
-DATE_COLS_BASE = {'date'}.union(METRIC_COLS)
-SERP_COLS_BASE = {'feature', 'query', 'position', 'url'} # Note: 'url' maps to 'page' later
+QUERY_PAGE_COLS = {'query', 'page'}
+QUERY_ONLY_COLS = {'query'}
+PAGE_ONLY_COLS = {'page'}
+DEVICE_COLS = {'device'}
+COUNTRY_COLS = {'country'}
+DATE_COLS = {'date'}
+FEATURE_COLS = {'feature'}
+FILTER_COLS = {'filter', 'value'} # Simplified filter check
+
+# Full base sets (dimension + metrics)
+QUERY_COLS_BASE = QUERY_ONLY_COLS.union(METRIC_COLS)
+PAGE_COLS_BASE = PAGE_ONLY_COLS.union(METRIC_COLS)
+DEVICE_COLS_BASE = DEVICE_COLS.union(METRIC_COLS)
+COUNTRY_COLS_BASE = COUNTRY_COLS.union(METRIC_COLS)
+DATE_COLS_BASE = DATE_COLS.union(METRIC_COLS)
+# More flexible SERP feature check (feature + position + metrics)
+SERP_COLS_BASE = FEATURE_COLS.union(METRIC_COLS) 
 
 # Define Spanish column equivalents
 SPANISH_COLS = {
     'consultas principales': 'query',
     'páginas': 'page',
+    'páginas principales': 'page', # Added this
     'clics': 'clicks',
     'impresiones': 'impressions',
     'ctr': 'ctr',
@@ -25,8 +37,10 @@ SPANISH_COLS = {
     'dispositivo': 'device',
     'fecha': 'date',
     'aparición en búsquedas': 'feature',
-    # Add other common variations if needed
-    'url': 'page' # Needed for SERP feature matching
+    'filtrar': 'filter',  # Added this
+    'comparación': 'comparison', # Keep in case it appears
+    'valor': 'value', # Added this
+    'url': 'page' # Needed for SERP feature matching if present
 }
 
 def get_standardized_columns(df: pd.DataFrame) -> set:
@@ -42,47 +56,53 @@ def identify_file_type(df: pd.DataFrame) -> str:
     standard_cols = get_standardized_columns(df)
     
     # --- Prioritize Checks ---
-    # 1. Full Query-based types (most specific)
-    if QUERY_COLS_BASE.issubset(standard_cols):
-        # These files have query, page, metrics AND a dimension
-        if 'device' in standard_cols:
-            return 'devices' # Or potentially a more specific name if needed
-        elif 'country' in standard_cols:
-            return 'countries'
-        elif 'date' in standard_cols:
-            return 'dates'
+    # Check based on presence of key dimension columns + metrics
+    # Note: Order matters if a file could match multiple types (e.g., query+page+device)
+
+    # 1. Query & Page present (potentially with other dimensions)
+    if QUERY_PAGE_COLS.issubset(standard_cols) and METRIC_COLS.issubset(standard_cols):
+        # This is the most complete GSC performance data
+        if DEVICE_COLS.issubset(standard_cols):
+            return 'devices' # Contains Query, Page, Metrics, Device
+        elif COUNTRY_COLS.issubset(standard_cols):
+            return 'countries' # Contains Query, Page, Metrics, Country
+        elif DATE_COLS.issubset(standard_cols):
+            return 'dates' # Contains Query, Page, Metrics, Date
         else:
-            # Has query, page, and metrics, but no extra dimension
-            return 'queries' # Base query/page performance
-            
-    # 2. Dimension-specific types (without query/page)
-    # Check these *before* the simpler page/query types
+            return 'queries' # Contains Query, Page, Metrics
+
+    # 2. Dimension-specific types (dimension + metrics, NO query/page assumed)
+    # Check these before simpler query/page only checks
     elif DEVICE_COLS_BASE.issubset(standard_cols):
         return 'devices' # Only device + metrics
     elif COUNTRY_COLS_BASE.issubset(standard_cols):
         return 'countries' # Only country + metrics
     elif DATE_COLS_BASE.issubset(standard_cols):
         return 'dates' # Only date + metrics
-
-    # 3. Simpler Page-based type (without query)
-    elif PAGE_COLS_BASE.issubset(standard_cols):
-        return 'pages' # Only page + metrics
-        
-    # 4. SERP features
     elif SERP_COLS_BASE.issubset(standard_cols):
-         return 'serp_features'
+        return 'serp_features' # Only feature + metrics + position
+        
+    # 3. Query only + Metrics
+    elif QUERY_COLS_BASE.issubset(standard_cols):
+         return 'queries' # Query + metrics (like Consultas.csv example)
          
-    # 5. Other specific types
+    # 4. Page only + Metrics
+    elif PAGE_COLS_BASE.issubset(standard_cols):
+        return 'pages' # Page + metrics (like Páginas.csv example)
+        
+    # 5. Filter file check (Simplified)
+    elif FILTER_COLS.issubset(standard_cols):
+        return 'filters'
+         
+    # 6. Other specific, non-GSC performance types (add more as needed)
     elif {'url', 'title', 'meta_description'}.issubset(standard_cols):
         return 'meta_data'
     elif {'url', 'mobile_usability', 'mobile_friendly_score'}.issubset(standard_cols):
         return 'mobile'
     elif {'url', 'backlinks', 'domain_authority'}.issubset(standard_cols):
         return 'backlinks'
-    elif {'filter', 'comparison', 'value'}.issubset(standard_cols):
-        return 'filters'
         
-    # 6. Fallback Unknown
+    # 7. Fallback Unknown
     else:
         logging.warning(f"Unknown file type. Standardized columns found: {standard_cols}")
         return 'unknown'
