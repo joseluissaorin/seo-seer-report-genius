@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+venv/
+csv/
+reports/
+changelog.md
+codebase-knowledge.md

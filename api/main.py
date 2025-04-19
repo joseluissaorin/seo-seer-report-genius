@@ -16,6 +16,35 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
 import base64
+import logging
+
+# --- Add basic logging configuration ---
+# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s') # Keep old config commented
+
+# Create logger
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Create formatter
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Create file handler
+log_file_path = os.path.join(os.path.dirname(__file__), 'api.log') # Place log file in api directory
+file_handler = logging.FileHandler(log_file_path)
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(formatter)
+
+# Create console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(formatter)
+
+# Add handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
+logger.info(f"Logging configured. Log file: {log_file_path}") # Log confirmation
+# --- End logging configuration ---
 
 from utils.file_processor import process_csv_files
 from utils.query_analysis import QueryAnalyzer
@@ -259,9 +288,11 @@ def generate_pdf_report(analysis_results: Dict, api_key: str) -> str:
     
     # Generate executive summary with Gemini AI
     try:
+        logging.info("Configuring Gemini API...")
         # Configure Gemini API with the provided key
         genai.configure(api_key=api_key)
-        
+        logging.info("Gemini API configured successfully.")
+
         # Set up generation configuration
         generation_config = {
             "temperature": 1,
@@ -270,13 +301,15 @@ def generate_pdf_report(analysis_results: Dict, api_key: str) -> str:
             "max_output_tokens": 65536,
             "response_mime_type": "text/plain",
         }
-        
+
+        logging.info(f"Creating Gemini model: gemini-2.5-pro-preview-03-25")
         # Create the model with appropriate parameters
         model = genai.GenerativeModel(
             model_name="gemini-2.5-pro-preview-03-25",
             generation_config=generation_config
         )
-        
+        logging.info("Gemini model created.")
+
         # Prepare a simplified version of the analysis results (to avoid token limits)
         simplified_results = {}
         for key, value in analysis_results.items():
@@ -291,20 +324,22 @@ def generate_pdf_report(analysis_results: Dict, api_key: str) -> str:
             
         # Create prompt for the summary
         summary_prompt = "Create a concise executive summary for an SEO analysis report based on the following data: " + json.dumps(simplified_results, default=str)[:7000] + "\n\nFocus on key insights, trends, and actionable recommendations. Keep it under 300 words."
-        
+        logging.info(f"Prepared summary prompt (length: {len(summary_prompt)} chars). Starting chat...")
+
         # Create a chat session
         chat_session = model.start_chat(history=[])
-        
+
+        logging.info("Sending message to Gemini for summary...")
         # Generate the summary
         response = chat_session.send_message(summary_prompt)
         summary_text = response.text
-        
+        logging.info("Received summary from Gemini.")
+
         # Add the generated summary to the PDF
         elements.append(Paragraph(summary_text, styles['Normal']))
     except Exception as e:
         # Handle any errors with the Gemini API
-        error_message = f"Unable to generate AI summary. Error: {str(e)}"
-        print(error_message)
+        logging.exception("Failed to generate AI summary. Error details:") # Use logging.exception to include traceback
         elements.append(Paragraph("Unable to generate AI summary. Please check your API key or try again later.", styles['Normal']))
     
     elements.append(Spacer(1, 20))
@@ -405,13 +440,15 @@ def generate_pdf_report(analysis_results: Dict, api_key: str) -> str:
         4. Geographic targeting
         5. Technical SEO improvements
         """
-        
+        logging.info(f"Prepared final recommendations prompt (length: {len(final_prompt)} chars). Generating content...")
+
         # Generate recommendations
         final_insights = model.generate_content(final_prompt)
+        logging.info("Received final recommendations from Gemini.")
         elements.append(Paragraph(final_insights.text, styles['Normal']))
     except Exception as e:
-        error_message = f"Unable to generate AI recommendations. Error: {str(e)}"
-        print(error_message)
+        # Handle any errors with the Gemini API
+        logging.exception("Failed to generate AI recommendations. Error details:") # Use logging.exception
         elements.append(Paragraph("Unable to generate AI recommendations. Please check your API key or try again later.", styles['Normal']))
     
     # Build the PDF
