@@ -1,107 +1,99 @@
 
 # SEO Seer: Advanced SEO Analysis Tool
 
-SEO Seer is a powerful web application that transforms Google Search Console exports into comprehensive SEO reports with actionable insights. The application uses advanced analytics combined with AI to provide meaningful recommendations for improving your website's search engine performance.
+SEO Seer is a powerful web application that transforms Google Search Console data into comprehensive SEO insights using AI-powered analysis. Get enterprise-level SEO analytics at a fraction of the cost.
 
-## Features
+## Key Features
 
-- **CSV Upload**: Easily upload your Google Search Console export data
-- **AI-Powered Analysis**: Leverages Gemini AI for intelligent insights
-- **Detailed PDF Reports**: Receive comprehensive analysis reports
-- **Actionable Recommendations**: Get clear steps to improve your SEO
-- **Keyword Opportunities**: Discover new keywords to target
-- **Content Suggestions**: Get ideas for new content based on your data
+### 🔍 Advanced Analysis
+- **AI-Powered Insights**: Leverages Gemini AI for intelligent recommendations
+- **Comprehensive Reports**: Get detailed PDF reports with actionable insights
+- **Multi-Device Analysis**: Understand performance across desktop, mobile, and tablet
+- **Geographic Insights**: Analyze performance by country and region
 
-## Project Structure
+### 📊 Data Processing
+- **CSV Upload**: Easy import of Google Search Console exports
+- **Automatic Language Detection**: Supports both English and Spanish GSC exports
+- **Real-time Processing**: See analysis progress as your data is processed
+- **Privacy-First**: All data is processed locally and securely
 
-- **Frontend**: React application with modern UI
-- **Backend**: FastAPI Python server for data processing and AI analysis
+### 📈 SEO Analytics
+- **Keyword Research**: Discover new keyword opportunities
+- **Competitor Analysis**: Understand your market position
+- **Device Performance**: Track mobile vs desktop trends
+- **Geographic Analysis**: Identify regional opportunities
+- **Temporal Trends**: Analyze performance over time
 
-## Setup Instructions
+### 📑 Report Generation
+- **PDF Reports**: Downloadable, comprehensive analysis
+- **Data Visualization**: Clear charts and graphs
+- **Actionable Insights**: Step-by-step recommendations
+- **Custom Branding**: Professional, branded reports
 
-### Frontend Setup
+## Quick Start
 
-1. Install dependencies:
+1. **Installation**:
    ```bash
+   git clone https://github.com/yourusername/seo-seer.git
+   cd seo-seer
    npm install
    ```
 
-2. Start the development server:
+2. **Start Development Servers**:
    ```bash
+   # Frontend
    npm run dev
-   ```
 
-3. The React application will be available at http://localhost:8080
-
-### Backend Setup
-
-1. Navigate to the API directory:
-   ```bash
+   # Backend (in new terminal)
    cd api
-   ```
-
-2. Create a virtual environment (recommended):
-   ```bash
    python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. Install dependencies:
-   ```bash
+   source venv/bin/activate  # or `venv\Scripts\activate` on Windows
    pip install -r requirements.txt
+   python run_server.py
    ```
 
-4. Start the FastAPI server:
-   ```bash
-   uvicorn main:app --reload
-   ```
+3. Open http://localhost:8080 in your browser
 
-5. The backend API will be available at http://localhost:8000
+## Documentation
 
-## API Endpoints
+For detailed setup instructions, including reverse proxy configuration and advanced usage, see our [Setup Documentation](docs/SETUP.md).
 
-- `POST /analyze-seo`: Upload GSC data and generate SEO report
-  - Parameters:
-    - `file`: CSV file from Google Search Console
-    - `api_key`: Gemini API key for AI analysis
+## Requirements
 
-## How It Works
+- Node.js 18+
+- Python 3.10+
+- Gemini API key (for AI analysis)
 
-1. **Data Upload**: Users upload their Google Search Console export data
-2. **Data Processing**: The system analyzes the CSV data to extract key metrics and patterns
-3. **AI Analysis**: Gemini AI is used to generate insights and recommendations
-4. **Report Generation**: A comprehensive PDF report is created with visualizations and actionable steps
-5. **Download**: Users can download and view their complete SEO analysis
+## Technology Stack
 
-## Getting a Gemini API Key
+### Frontend
+- React with TypeScript
+- Vite for build tooling
+- TailwindCSS for styling
+- shadcn/ui components
+- Recharts for data visualization
 
-To use SEO Seer, you'll need a Gemini API key:
+### Backend
+- FastAPI
+- Pandas for data processing
+- Matplotlib for visualization
+- Google Generative AI (Gemini)
+- ReportLab for PDF generation
 
-1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Sign in with your Google account
-3. Create a new API key
-4. Copy the key and paste it into the application when prompted
+## Contributing
 
-## Example Google Search Console Export
+We welcome contributions! Please read our contributing guidelines and submit pull requests to our repository.
 
-For testing, you can export data from Google Search Console:
+## Security
 
-1. Go to Google Search Console
-2. Select your property
-3. Navigate to Performance
-4. Set your desired date range
-5. Click "Export" and choose "CSV"
+- API keys are never stored, only used for processing
+- All data processing happens locally
+- No data is sent to external servers except for AI analysis
 
-## Security Notes
+## License
 
-- API keys are only used for processing and are not stored on our servers
-- Data uploads are processed and then removed to ensure privacy
+MIT License - see LICENSE file for details
 
-## Technologies Used
+## Support
 
-- **Frontend**: React, TypeScript, TailwindCSS
-- **Backend**: FastAPI, Python
-- **Data Processing**: Pandas, NumPy, Scikit-learn
-- **AI Integration**: Google Generative AI (Gemini)
-- **Visualization**: Matplotlib
-- **Report Generation**: ReportLab
+For support, please open an issue in the GitHub repository or contact our support team.
