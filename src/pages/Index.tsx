@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +35,7 @@ import {
   LucideIcon,
   Lightbulb
 } from "lucide-react";
+import FileUploadZone from '@/components/FileUploadZone';
 
 interface FeatureCardProps {
   title: string;
@@ -60,7 +60,6 @@ const FeatureCard = ({ title, description, icon: Icon }: FeatureCardProps) => (
 );
 
 export default function Index() {
-  // Replace single file state with multiple files
   const [files, setFiles] = useState<File[]>([]);
   const [apiKey, setApiKey] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -242,51 +241,10 @@ export default function Index() {
                     <form onSubmit={handleSubmit} className="space-y-6">
                       <div className="space-y-2">
                         <Label htmlFor="file" className="text-gray-700 font-medium">Search Console CSV Export</Label>
-                        <div 
-                          className={`border-2 border-dashed rounded-md p-8 transition-colors duration-200 cursor-pointer flex flex-col items-center justify-center ${
-                            files.length > 0 
-                              ? 'bg-purple-50 border-purple-200 hover:bg-purple-100' 
-                              : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                          }`} 
-                          onClick={() => document.getElementById('file')?.click()}
-                        >
-                          <div className="text-center space-y-3">
-                            <div className={`rounded-full p-3 mx-auto ${files.length > 0 ? 'bg-purple-100' : 'bg-gray-100'}`}>
-                              <UploadCloud className={`h-8 w-8 ${files.length > 0 ? 'text-purple-500' : 'text-gray-400'}`} />
-                            </div>
-                            <div className="space-y-1">
-                              <Label htmlFor="file" className="text-primary font-medium cursor-pointer">
-                                {files.length > 0 ? 'Change files' : 'Click to upload'}
-                              </Label>
-                              <p className="text-gray-500 text-sm">or drag and drop</p>
-                            </div>
-                            <p className="text-xs text-gray-500">
-                              Supports CSV exports from Google Search Console (Spanish/English):
-                              <br />Queries, Pages, Devices, Countries, Dates, Search Appearance, Filters
-                            </p>
-                            {files.length > 0 && (
-                              <div className="mt-2 space-y-2">
-                                {files.map((file, index) => (
-                                  <div 
-                                    key={index} 
-                                    className="flex items-center justify-center gap-2 p-3 bg-purple-100 rounded-md text-purple-700 font-medium"
-                                  >
-                                    <FileCheck2 className="h-5 w-5 text-green-500" />
-                                    <span>{file.name}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <Input 
-                            id="file" 
-                            type="file" 
-                            accept=".csv" 
-                            multiple  
-                            onChange={handleFileChange} 
-                            className="hidden" 
-                          />
-                        </div>
+                        <FileUploadZone 
+                          files={files}
+                          onFilesChange={setFiles}
+                        />
                       </div>
                       
                       <div className="space-y-2">

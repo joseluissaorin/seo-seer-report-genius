@@ -6,7 +6,7 @@
 2. Project Structure Overview
 3. Frontend Setup
 4. Backend Setup
-5. Reverse Proxy Configuration
+5. Reverse Proxy Configuration (Nginx/Caddy)
 6. Development Workflow
 7. Troubleshooting Common Issues
 8. Advanced Configuration Options
@@ -120,6 +120,26 @@ server {
         proxy_pass http://localhost:4568/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+### Using Caddy (Recommended)
+Add the following to your Caddyfile:
+
+```caddy
+seo-seer.yourdomain.com {
+    # Frontend application
+    reverse_proxy localhost:4567
+
+    # API endpoints
+    handle_path /api/* {
+        reverse_proxy localhost:4568
+    }
+
+    # Optional: Configure maximum upload size for CSV files
+    request_body {
+        max_size 10MB
     }
 }
 ```
