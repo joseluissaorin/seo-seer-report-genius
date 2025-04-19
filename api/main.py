@@ -17,6 +17,7 @@ import seaborn as sns
 from io import BytesIO
 import base64
 import logging
+import uuid
 
 # --- Add basic logging configuration ---
 # logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s') # Keep old config commented
@@ -94,6 +95,7 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
     logger.info(f"Received /analyze-seo request with {len(files)} file(s).")
     processed_files_list = []
     filenames = [] # Keep track of original filenames
+    temp_image_paths = [] # List to store paths of generated temp images for cleanup
     
     if not files:
         logger.error("No files uploaded.")
@@ -330,12 +332,13 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
         logger.info(f"Analysis complete. Results keys: {list(analysis_results.keys())}")
         logger.info(f"Visualization paths: {list(visualization_paths.keys())}")
 
-        # Combine analysis text results and visualization paths for the report generator
-        report_data = {**analysis_results, **visualization_paths}
+        # Combine analysis text results and visualization paths/figures for the report generator
+        report_data = {**analysis_results, **visualization_paths} # visualization_paths now contains dicts of figures
 
         # Generate PDF report
         logger.info("Generating PDF report...")
-        pdf_path = generate_pdf_report(report_data, api_key, data_frames)
+        # Pass the temp_image_paths list to the report generator
+        pdf_path = generate_pdf_report(report_data, api_key, data_frames, temp_image_paths)
         logger.info(f"PDF report generated at: {pdf_path}")
 
         # Return PDF report
@@ -348,8 +351,9 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
         logger.exception(f"An unexpected error occurred: {str(e)}") # Log full traceback
         raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
     finally:
-        # Clean up temporary image files if visualization_paths was populated
-        for path in visualization_paths.values():
+        # Clean up temporary image files using the collected list
+        logger.info(f"Cleaning up {len(temp_image_paths)} temporary image(s)...")
+        for path in temp_image_paths:
             if path and os.path.exists(path):
                 try:
                     os.remove(path)
@@ -357,8 +361,8 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
                 except Exception as e:
                     logger.error(f"Error cleaning up temp file {path}: {str(e)}")
 
-# --- Report Generation Function --- 
-def generate_pdf_report(report_data: Dict, api_key: str, data_frames: Dict[str, pd.DataFrame]) -> str:
+# --- Report Generation Function ---
+def generate_pdf_report(report_data: Dict, api_key: str, data_frames: Dict[str, pd.DataFrame], temp_image_paths: List[str]) -> str:
     """Generate a PDF report conditionally based on available analysis data."""
     logger.info("Generating PDF report with available data types: %s", list(data_frames.keys()))
     
@@ -378,7 +382,6 @@ def generate_pdf_report(report_data: Dict, api_key: str, data_frames: Dict[str, 
     # Use a known location for easier debugging if needed, ensure cleanup
     pdf_dir = tempfile.gettempdir()
     # Ensure unique filenames if running concurrently, e.g., using uuid
-    import uuid
     pdf_filename = f"seo_analysis_report_{uuid.uuid4()}.pdf"
     pdf_path = os.path.join(pdf_dir, pdf_filename)
     
@@ -469,7 +472,7 @@ def generate_pdf_report(report_data: Dict, api_key: str, data_frames: Dict[str, 
     story.append(Paragraph(summary_text.replace('\n', '<br/>'), summary_style))
     story.append(Spacer(1, 12))
 
-    # --- Helper function to add sections --- 
+    # --- Helper function to add sections ---
     def add_report_section(title, analysis_key, visualization_key=None, data_formatter=None):
         if analysis_key in report_data:
             logger.info(f"Adding section: {title}")
@@ -490,30 +493,65 @@ def generate_pdf_report(report_data: Dict, api_key: str, data_frames: Dict[str, 
                     logger.error(f"Error formatting data for {title}: {str(e)}", exc_info=True)
                     story.append(Paragraph(f"Error displaying data for {title}.", styles['Normal']))
 
-            # Add visualization if key exists and path is valid
+            # Add visualization(s)
             if visualization_key and visualization_key in report_data:
-                img_path = report_data[visualization_key]
-                # --- Check if img_path is a valid string before using os.path.exists ---
-                if isinstance(img_path, str) and img_path and os.path.exists(img_path):
-                    logger.info(f"Adding image {img_path} to PDF section {title}.")
+                viz_data = report_data[visualization_key]
+
+                # Case 1: viz_data is a dictionary of Plotly figures
+                if isinstance(viz_data, dict):
+                    logger.info(f"Processing visualization dictionary for section: {title}")
+                    for fig_name, fig in viz_data.items():
+                        # Check if it's a Plotly figure object (or similar graphic object)
+                        if hasattr(fig, 'write_image'):
+                            try:
+                                # Generate unique temp filename
+                                temp_img_filename = f"{title.replace(' ', '_').lower()}_{fig_name}_{uuid.uuid4()}.png"
+                                temp_img_path = os.path.join(tempfile.gettempdir(), temp_img_filename)
+
+                                # Save the figure as an image
+                                logger.info(f"Saving figure '{fig_name}' to temp path: {temp_img_path}")
+                                fig.write_image(temp_img_path)
+
+                                # Add image to PDF story
+                                img = Image(temp_img_path, width=500, height=250) # Adjust size as needed
+                                img.hAlign = 'CENTER'
+                                story.append(img)
+                                story.append(Spacer(1, 6)) # Spacer after each image
+
+                                # Add the path to the list for cleanup
+                                temp_image_paths.append(temp_img_path)
+
+                            except Exception as e:
+                                logger.error(f"Error saving or adding figure '{fig_name}' for section {title}: {str(e)}", exc_info=True)
+                                story.append(Paragraph(f"(Error rendering visualization: {fig_name})", styles['Normal']))
+                        else:
+                             logger.warning(f"Item '{fig_name}' in visualization dict for '{title}' is not a recognized figure object (type: {type(fig)}). Skipping.")
+                    story.append(Spacer(1, 6)) # Extra spacer after all images in the dict
+
+                # Case 2: viz_data is a single string path (maintaining backward compatibility)
+                elif isinstance(viz_data, str) and viz_data and os.path.exists(viz_data):
+                    logger.info(f"Adding image from path {viz_data} to PDF section {title}.")
                     try:
-                        img = Image(img_path, width=500, height=250) # Adjust size
+                        img = Image(viz_data, width=500, height=250) # Adjust size
                         img.hAlign = 'CENTER'
                         story.append(img)
                         story.append(Spacer(1, 12))
+                        # Assuming pre-existing paths don't need dynamic cleanup via temp_image_paths
+                        # If they *are* temporary, they should be added to temp_image_paths earlier
                     except Exception as e:
-                        logger.error(f"Error adding image {img_path}: {str(e)}")
+                        logger.error(f"Error adding image from path {viz_data}: {str(e)}")
+
+                # Case 3: Invalid data
                 else:
-                    # Log appropriately if it's not a string or doesn't exist
-                    if not isinstance(img_path, str):
-                        logger.warning(f"Visualization key '{visualization_key}' provided non-string data (type: {type(img_path)}), expected a file path.")
-                    elif not img_path:
-                        logger.warning(f"Empty path provided for visualization key '{visualization_key}'.")
+                    if not isinstance(viz_data, str):
+                         logger.warning(f"Visualization key '{visualization_key}' provided non-string/non-dict data (type: {type(viz_data)}).")
+                    elif not viz_data:
+                         logger.warning(f"Empty path provided for visualization key '{visualization_key}'.")
                     else: # It was a string, but didn't exist
-                        logger.warning(f"Visualization image not found at path: {img_path}")
-            
-            # Add a spacer after the section (image or text)
-            story.append(Spacer(1, 12)) 
+                         logger.warning(f"Visualization image not found at path: {viz_data}")
+
+            # Add a spacer after the section content (text/data/images)
+            story.append(Spacer(1, 12))
             return True
         return False
 
