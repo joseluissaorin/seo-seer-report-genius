@@ -20,24 +20,31 @@ Before setting up SEO Seer, ensure your system meets these prerequisites:
 - **Package Managers**: npm (for frontend) and pip (for backend)
 - **Disk Space**: At least 1GB free for dependencies and project files
 - **Operating System**: Windows, macOS, or Linux
+- **Memory**: Minimum 4GB RAM recommended for analysis operations
 
 ## 2. Project Structure Overview
-
-SEO Seer follows a client-server architecture:
 
 ```
 seo-seer/
 │
 ├── / (Root - Frontend React application)
 │   ├── src/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── pages/
+│   │   └── utils/
 │   ├── public/
 │   ├── vite.config.ts
-│   ├── package.json
-│   └── ...
+│   └── package.json
 │
 └── api/ (Backend Python application)
     ├── main.py
     ├── utils/
+    │   ├── seo_health.py
+    │   ├── keyword_research.py
+    │   ├── content_gap_analyzer.py
+    │   ├── serp_feature_analyzer.py
+    │   └── backlink_analyzer.py
     ├── templates/
     ├── requirements.txt
     └── ...
@@ -46,25 +53,27 @@ seo-seer/
 ## 3. Frontend Setup
 
 ### Installing Dependencies
-
 ```bash
-# Navigate to the project root directory
 cd seo-seer
 npm install
 ```
 
-### Starting the Development Server
+### Environment Configuration
+Create a `.env` file in the root directory:
+```
+VITE_API_URL=http://localhost:4568
+```
 
+### Starting the Development Server
 ```bash
 npm run dev
 ```
 
-The frontend will be available at http://localhost:8080
+The frontend will be available at http://localhost:4567
 
 ## 4. Backend Setup
 
 ### Creating a Python Virtual Environment
-
 ```bash
 cd api
 python -m venv venv
@@ -76,29 +85,24 @@ source venv/bin/activate
 ```
 
 ### Installing Python Dependencies
-
 ```bash
 pip install -r requirements.txt
 ```
 
 ### Starting the Backend Server
-
 ```bash
 python run_server.py
 ```
 
-Or with uvicorn:
+The FastAPI backend will be available at http://localhost:4568
 
-```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-The FastAPI backend will be available at http://localhost:8000
+### API Key Configuration
+1. Get a Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Enter it in the SEO Seer interface when prompted
 
 ## 5. Reverse Proxy Configuration
 
 ### Using Nginx
-
 ```nginx
 server {
     listen 80;
@@ -106,109 +110,84 @@ server {
 
     # Frontend
     location / {
-        proxy_pass http://localhost:8080;
+        proxy_pass http://localhost:4567;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     # Backend API
     location /api/ {
-        proxy_pass http://localhost:8000/;
+        proxy_pass http://localhost:4568/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
 
-### Using Docker Compose
-
-```yaml
-version: '3'
-
-services:
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    ports:
-      - "8080:8080"
-
-  backend:
-    build:
-      context: ./api
-      dockerfile: Dockerfile.backend
-    ports:
-      - "8000:8000"
-
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
-    depends_on:
-      - frontend
-      - backend
-```
-
 ## 6. Development Workflow
 
-### Running Both Frontend and Backend
-
-1. Terminal 1 (Frontend):
+1. Start both servers:
    ```bash
+   # Terminal 1 (Frontend)
    npm run dev
+
+   # Terminal 2 (Backend)
+   cd api && source venv/bin/activate && python run_server.py
    ```
 
-2. Terminal 2 (Backend):
-   ```bash
-   cd api
-   source venv/bin/activate
-   python run_server.py
-   ```
-
-### API Key Setup
-
-1. Get a Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Enter it in the SEO Seer interface when prompted
+2. Access the application at http://localhost:4567
+3. Upload GSC data files for analysis
+4. Enter your Gemini API key when prompted
+5. View generated reports and insights
 
 ## 7. Troubleshooting
 
-### CORS Issues
-- Use the provided reverse proxy setup
-- Ensure backend CORS headers are configured
-- For development, use browser extensions to disable CORS
+### Common Issues and Solutions
 
-### Port Conflicts
-Frontend (vite.config.ts):
-```typescript
-server: {
-  port: 3000,  // Changed from 8080
-},
-```
+1. **Port Conflicts**
+   - Frontend port can be changed in `vite.config.ts`
+   - Backend port can be changed in `run_server.py`
 
-Backend:
-```bash
-uvicorn main:app --reload --port 8001
-```
+2. **File Upload Issues**
+   - Check file size limits
+   - Verify CSV format matches GSC export format
+   - Ensure proper file permissions
 
-## 8. Advanced Configuration
+3. **Analysis Errors**
+   - Verify API key validity
+   - Check CSV data format
+   - Ensure sufficient system resources
 
-### Environment Variables
+4. **CORS Issues**
+   - Configure backend CORS settings
+   - Check frontend API URL configuration
+   - Verify proxy settings if using reverse proxy
 
-Frontend (.env):
-```
-VITE_API_URL=http://localhost:8000
-```
+## 8. Advanced Features Configuration
 
-Backend:
-```bash
-export MAX_UPLOAD_SIZE=50000000
-export DEBUG=True
-```
+### SEO Health Score
+- Customize scoring weights in `seo_health.py`
+- Adjust threshold values for different metrics
+- Add custom scoring factors
 
-For more details on advanced usage and customization, please refer to our documentation.
+### Mobile Optimization
+- Configure mobile-friendliness criteria
+- Adjust scoring thresholds
+- Customize recommendation logic
+
+### Keyword Analysis
+- Set cannibalization detection thresholds
+- Configure content gap analysis parameters
+- Adjust keyword clustering settings
+
+### SERP Features
+- Customize feature detection rules
+- Configure position tracking
+- Adjust feature scoring weights
+
+### Backlink Analysis
+- Set domain authority thresholds
+- Configure backlink quality metrics
+- Adjust link scoring parameters
+
+For more detailed configuration options, please refer to the specific feature documentation in our wiki.

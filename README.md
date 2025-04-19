@@ -6,10 +6,12 @@ SEO Seer is a powerful web application that transforms Google Search Console dat
 ## Key Features
 
 ### 🔍 Advanced Analysis
-- **AI-Powered Insights**: Leverages Gemini AI for intelligent recommendations
-- **Comprehensive Reports**: Get detailed PDF reports with actionable insights
-- **Multi-Device Analysis**: Understand performance across desktop, mobile, and tablet
-- **Geographic Insights**: Analyze performance by country and region
+- **SEO Health Score**: Comprehensive scoring system for overall SEO performance
+- **Mobile Optimization**: Detailed mobile-friendliness analysis and recommendations
+- **Keyword Analysis**: Advanced keyword research and cannibalization detection
+- **SERP Features**: Track featured snippets, knowledge panels, and rich results
+- **Competitor Intelligence**: Compare your content against competitors
+- **Backlink Analysis**: Monitor your backlink profile and domain authority
 
 ### 📊 Data Processing
 - **CSV Upload**: Easy import of Google Search Console exports
@@ -18,16 +20,16 @@ SEO Seer is a powerful web application that transforms Google Search Console dat
 - **Privacy-First**: All data is processed locally and securely
 
 ### 📈 SEO Analytics
-- **Keyword Research**: Discover new keyword opportunities
-- **Competitor Analysis**: Understand your market position
-- **Device Performance**: Track mobile vs desktop trends
-- **Geographic Analysis**: Identify regional opportunities
-- **Temporal Trends**: Analyze performance over time
+- **Content Gap Analysis**: Identify missing content opportunities
+- **Interactive Visualizations**: Dynamic charts and performance metrics
+- **Statistical Analysis**: Advanced data modeling and trend prediction
+- **Geographic Insights**: Regional performance breakdown
+- **Device Analysis**: Cross-device performance tracking
 
 ### 📑 Report Generation
 - **PDF Reports**: Downloadable, comprehensive analysis
-- **Data Visualization**: Clear charts and graphs
-- **Actionable Insights**: Step-by-step recommendations
+- **SERP Preview**: Visual search result previews
+- **Action Items**: Prioritized recommendations
 - **Custom Branding**: Professional, branded reports
 
 ## Quick Start
@@ -52,7 +54,7 @@ SEO Seer is a powerful web application that transforms Google Search Console dat
    python run_server.py
    ```
 
-3. Open http://localhost:8080 in your browser
+3. Open http://localhost:4567 in your browser
 
 ## Documentation
 
