@@ -4,8 +4,7 @@ import { Separator } from "@/components/ui/separator";
 
 const Footer = () => {
   return (
-    <footer className="py-6 text-center text-muted-foreground bg-transparent backdrop-blur-sm animate-fade-in">
-      <Separator className="mb-4" />
+    <footer className="py-6 text-center text-muted-foreground bg-transparent backdrop-blur-0 animate-fade-in">
       <div className="container mx-auto px-4">
         <p className="flex items-center justify-center gap-2 text-sm">
           made with 
