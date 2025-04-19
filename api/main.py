@@ -387,8 +387,10 @@ def generate_pdf_report(report_data: Dict, api_key: str, data_frames: Dict[str, 
     story = []
 
     # Custom Styles (Optional - enhance appearance)
-    styles.add(ParagraphStyle(name='Justify', alignment=4)) # TA_JUSTIFY = 4
-    styles.add(ParagraphStyle(name='Code', fontName='Courier', fontSize=9, leading=11))
+    if not styles.has_key('Justify'): # Check before adding
+        styles.add(ParagraphStyle(name='Justify', alignment=4)) # TA_JUSTIFY = 4
+    if not styles.has_key('Code'): # Check before adding
+        styles.add(ParagraphStyle(name='Code', fontName='Courier', fontSize=9, leading=11))
 
     # --- Report Header ---
     story.append(Paragraph("SEO Analysis Report", styles['h1']))
