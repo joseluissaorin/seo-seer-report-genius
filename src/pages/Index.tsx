@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -114,7 +113,6 @@ export default function Index() {
 
     const progressInterval = setInterval(() => {
       setProgress(prev => {
-        // Artificial progress that slows down as it approaches 90%
         if (prev < 20) return prev + 5;
         if (prev < 40) return prev + 4;
         if (prev < 60) return prev + 3;
@@ -147,13 +145,9 @@ export default function Index() {
         throw new Error(errorData.detail || 'Failed to generate SEO report');
       }
 
-      // Complete the progress bar
       setProgress(100);
 
-      // Get the blob from the response
       const blob = await response.blob();
-      
-      // Create a URL for the blob
       const url = URL.createObjectURL(blob);
       setReportUrl(url);
       
@@ -173,6 +167,13 @@ export default function Index() {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const navigateToUploadTab = () => {
+    const uploadTab = document.querySelector('[data-state="inactive"][value="upload"]');
+    if (uploadTab && uploadTab instanceof HTMLElement) {
+      uploadTab.click();
     }
   };
 
@@ -577,7 +578,7 @@ export default function Index() {
                         insights for a fraction of the price, with complete data privacy and no recurring fees.
                       </p>
                       <Button 
-                        onClick={() => document.querySelector('[data-state="inactive"][value="upload"]')?.click()}
+                        onClick={navigateToUploadTab}
                         className="bg-gradient-to-r from-purple-700 to-purple-500 hover:from-purple-800 hover:to-purple-600"
                       >
                         Try SEO Seer Pro Now
