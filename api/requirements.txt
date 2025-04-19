@@ -25,3 +25,4 @@ adjustText==0.8
 scikit-network==0.29.1
 plotly==5.18.0
 kaleido==0.2.1
+
