@@ -299,7 +299,6 @@ def generate_pdf_report(analysis_results: Dict, api_key: str) -> str:
             "top_p": 0.95,
             "top_k": 64,
             "max_output_tokens": 65536,
-            "response_mime_type": "text/plain",
         }
 
         logging.info(f"Creating Gemini model: gemini-2.5-pro-preview-03-25")
