@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,7 +59,8 @@ const FeatureCard = ({ title, description, icon: Icon }: FeatureCardProps) => (
 );
 
 export default function Index() {
-  const [file, setFile] = useState<File | null>(null);
+  // Replace single file state with multiple files
+  const [files, setFiles] = useState<File[]>([]);
   const [apiKey, setApiKey] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [reportUrl, setReportUrl] = useState<string | null>(null);
@@ -67,18 +68,20 @@ export default function Index() {
   const { toast } = useToast();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      if (selectedFile.name.endsWith('.csv')) {
-        setFile(selectedFile);
+    if (e.target.files) {
+      const selectedFiles = Array.from(e.target.files);
+      const validCsvFiles = selectedFiles.filter(file => file.name.endsWith('.csv'));
+
+      if (validCsvFiles.length > 0) {
+        setFiles(validCsvFiles);
         toast({
-          title: "File selected",
-          description: `${selectedFile.name} ready for analysis.`,
+          title: "Files selected",
+          description: `${validCsvFiles.length} CSV file(s) ready for analysis.`,
         });
       } else {
         toast({
           title: "Invalid file format",
-          description: "Please upload a CSV export from Google Search Console",
+          description: "Please upload only CSV exports from Google Search Console",
           variant: "destructive",
         });
         e.target.value = '';
@@ -89,10 +92,10 @@ export default function Index() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!file) {
+    if (files.length === 0) {
       toast({
-        title: "Missing file",
-        description: "Please upload a CSV export from Google Search Console",
+        title: "Missing files",
+        description: "Please upload at least one CSV export from Google Search Console",
         variant: "destructive",
       });
       return;
@@ -125,12 +128,14 @@ export default function Index() {
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      files.forEach((file, index) => {
+        formData.append(`files`, file, file.name);
+      });
       formData.append('api_key', apiKey);
 
       toast({
         title: "Analysis started",
-        description: "We're generating your comprehensive SEO report...",
+        description: `Processing ${files.length} CSV file(s)...`,
       });
 
       const response = await fetch('http://localhost:8000/analyze-seo', {
@@ -238,19 +243,19 @@ export default function Index() {
                         <Label htmlFor="file" className="text-gray-700 font-medium">Search Console CSV Export</Label>
                         <div 
                           className={`border-2 border-dashed rounded-md p-8 transition-colors duration-200 cursor-pointer flex flex-col items-center justify-center ${
-                            file 
+                            files.length > 0 
                               ? 'bg-purple-50 border-purple-200 hover:bg-purple-100' 
                               : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                           }`} 
                           onClick={() => document.getElementById('file')?.click()}
                         >
                           <div className="text-center space-y-3">
-                            <div className={`rounded-full p-3 mx-auto ${file ? 'bg-purple-100' : 'bg-gray-100'}`}>
-                              <UploadCloud className={`h-8 w-8 ${file ? 'text-purple-500' : 'text-gray-400'}`} />
+                            <div className={`rounded-full p-3 mx-auto ${files.length > 0 ? 'bg-purple-100' : 'bg-gray-100'}`}>
+                              <UploadCloud className={`h-8 w-8 ${files.length > 0 ? 'text-purple-500' : 'text-gray-400'}`} />
                             </div>
                             <div className="space-y-1">
                               <Label htmlFor="file" className="text-primary font-medium cursor-pointer">
-                                {file ? 'Change file' : 'Click to upload'}
+                                {files.length > 0 ? 'Change files' : 'Click to upload'}
                               </Label>
                               <p className="text-gray-500 text-sm">or drag and drop</p>
                             </div>
@@ -258,14 +263,28 @@ export default function Index() {
                               Supports CSV exports from Google Search Console (Spanish/English):
                               <br />Queries, Pages, Devices, Countries, Dates, Search Appearance, Filters
                             </p>
-                            {file && (
-                              <div className="mt-2 flex items-center justify-center gap-2 p-3 bg-purple-100 rounded-md text-purple-700 font-medium">
-                                <FileCheck2 className="h-5 w-5 text-green-500" />
-                                <span>{file.name}</span>
+                            {files.length > 0 && (
+                              <div className="mt-2 space-y-2">
+                                {files.map((file, index) => (
+                                  <div 
+                                    key={index} 
+                                    className="flex items-center justify-center gap-2 p-3 bg-purple-100 rounded-md text-purple-700 font-medium"
+                                  >
+                                    <FileCheck2 className="h-5 w-5 text-green-500" />
+                                    <span>{file.name}</span>
+                                  </div>
+                                ))}
                               </div>
                             )}
                           </div>
-                          <Input id="file" type="file" accept=".csv" onChange={handleFileChange} className="hidden" />
+                          <Input 
+                            id="file" 
+                            type="file" 
+                            accept=".csv" 
+                            multiple  // Add multiple attribute
+                            onChange={handleFileChange} 
+                            className="hidden" 
+                          />
                         </div>
                       </div>
                       
@@ -659,76 +678,4 @@ export default function Index() {
                       </ol>
                     </div>
                     
-                    <div className="bg-purple-50 p-6 rounded-xl border border-purple-100 flex gap-4 flex-col md:flex-row">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-purple-800 mb-2">Why Choose SEO Seer Pro?</h4>
-                        <ul className="space-y-2 text-gray-600 text-sm">
-                          <li className="flex items-start gap-2">
-                            <ThumbsUp className="h-4 w-4 text-purple-600 mt-0.5 shrink-0" />
-                            <span>No subscription fees - just upload and analyze</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <ThumbsUp className="h-4 w-4 text-purple-600 mt-0.5 shrink-0" />
-                            <span>Get the power of premium SEO tools at a fraction of the cost</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <ThumbsUp className="h-4 w-4 text-purple-600 mt-0.5 shrink-0" />
-                            <span>Complete data privacy - your data never leaves your control</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <ThumbsUp className="h-4 w-4 text-purple-600 mt-0.5 shrink-0" />
-                            <span>AI-powered insights customized to your specific website and industry</span>
-                          </li>
-                        </ul>
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-purple-800 mb-2">Compare to Premium Tools</h4>
-                        <div className="flex items-center justify-between mb-2 pb-2 border-b border-purple-200">
-                          <span className="text-sm text-gray-600">Feature</span>
-                          <div className="flex space-x-8">
-                            <span className="text-sm text-gray-600 w-20 text-center">SEO Seer Pro</span>
-                            <span className="text-sm text-gray-600 w-20 text-center">SEMrush</span>
-                          </div>
-                        </div>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-600">Keyword Research</span>
-                            <div className="flex space-x-8">
-                              <span className="w-20 text-center text-green-600">✓</span>
-                              <span className="w-20 text-center text-green-600">✓</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-600">Competitor Analysis</span>
-                            <div className="flex space-x-8">
-                              <span className="w-20 text-center text-green-600">✓</span>
-                              <span className="w-20 text-center text-green-600">✓</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-600">Content Optimization</span>
-                            <div className="flex space-x-8">
-                              <span className="w-20 text-center text-green-600">✓</span>
-                              <span className="w-20 text-center text-green-600">✓</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-600">Monthly Fee</span>
-                            <div className="flex space-x-8">
-                              <span className="w-20 text-center text-green-600">$0</span>
-                              <span className="w-20 text-center text-red-600">$119+</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+                    <div className="bg-purple-50 p-6 rounded-xl border border-purple-100 flex gap
