@@ -117,14 +117,42 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
             await file.close() # Ensure file handles are closed
 
     try:
-        # Organize files by type
         logger.info(f"Processing {len(processed_files_list)} files...")
         data_frames = process_csv_files(processed_files_list)
         logger.info(f"Processed data types: {list(data_frames.keys())}")
         
+        # --- Log dtypes after processing ---
+        for name, df in data_frames.items():
+            logger.debug(f"DataFrame '{name}' dtypes after processing:\n{df.dtypes}")
+            # --- Attempt basic numeric conversion --- 
+            # Convert common metric columns, coercing errors to NaN
+            metric_cols_to_convert = ['clicks', 'impressions', 'ctr', 'position']
+            for col in metric_cols_to_convert:
+                if col in df.columns:
+                    original_dtype = str(df[col].dtype)
+                    if not pd.api.types.is_numeric_dtype(df[col]):
+                         # Check for percentage sign in CTR specifically
+                         if col == 'ctr' and df[col].astype(str).str.contains('%').any():
+                              logger.info(f"Attempting conversion for percentage CTR column in '{name}'")
+                              df[col] = pd.to_numeric(df[col].astype(str).str.replace('%', '', regex=False), errors='coerce') / 100.0
+                         # Check for commas as thousand separators
+                         elif df[col].astype(str).str.contains(',').any():
+                             logger.info(f"Attempting conversion for comma-formatted column '{col}' in '{name}'")
+                             df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '', regex=False), errors='coerce')
+                         else:
+                             df[col] = pd.to_numeric(df[col], errors='coerce')
+                             
+                         new_dtype = str(df[col].dtype)
+                         if original_dtype != new_dtype:
+                              logger.info(f"Converted column '{col}' in DataFrame '{name}' from {original_dtype} to {new_dtype}. Errors coerced to NaN.")
+                         else:
+                              logger.warning(f"Attempted conversion on non-numeric column '{col}' in DataFrame '{name}', but dtype remained {original_dtype}. Check data for non-standard formats.")
+            # Log dtypes again after conversion attempt
+            logger.debug(f"DataFrame '{name}' dtypes after conversion attempt:\n{df.dtypes}")
+        # --- End basic numeric conversion ---
+            
         if not data_frames:
              logger.warning("No processable data found in the uploaded files.")
-             # Depending on desired behavior, could raise HTTPException or return empty/error report
              raise HTTPException(status_code=400, detail="No processable data found in the uploaded CSV files.")
 
         # Initialize analyzers
@@ -137,27 +165,22 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
         analysis_results = {}
         visualization_paths = {} # Store paths to generated images
         
-        # --- Conditional Analysis --- 
-        # Note: We should review dependencies between analyses carefully.
-        # Some analyses might depend on results from others (e.g., content gap needs competitor data)
+        # --- Conditional Analysis with Logging --- 
         
-        # Query, Keyword, Competitor, Cannibalization, SERP Features, SERP Preview, Content Gap (often related)
-        if 'queries' in data_frames or 'pages' in data_frames: # Broaden trigger slightly?
-            queries_df = data_frames.get('queries') # Use .get for safety
+        if 'queries' in data_frames or 'pages' in data_frames:
+            queries_df = data_frames.get('queries') 
             pages_df = data_frames.get('pages')
             
-            # Combine queries and pages if both exist for richer context? Requires review of analyzers.
-            # combined_df = pd.concat([queries_df, pages_df], ignore_index=True) if queries_df is not None and pages_df is not None else queries_df if queries_df is not None else pages_df
-
             if queries_df is not None:
-                logger.info("Performing Query Analysis...")
+                logger.info("--- Starting Query Analysis --- Dtypes:")
+                logger.info(f"\n{queries_df.dtypes}")
                 analysis_results['query_analysis'] = query_analyzer.analyze_query_patterns(queries_df)
                 vis_path = create_query_visualizations(analysis_results['query_analysis'])
                 if vis_path: visualization_paths['query_visualizations'] = vis_path
                 
                 top_queries = queries_df.sort_values('impressions', ascending=False)['query'].head(10).tolist()
                 
-                logger.info("Performing Keyword Research...")
+                logger.info("--- Starting Keyword Research --- ")
                 try:
                     keyword_data = {}
                     trends = keyword_researcher.research_keyword_trends(top_queries[:5])
@@ -173,7 +196,7 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
                 except Exception as e:
                     logger.error(f"Keyword research error: {str(e)}")
 
-                logger.info("Performing Competitor Analysis...")
+                logger.info("--- Starting Competitor Analysis --- ")
                 try:
                     competitor_data = {}
                     competitors = competitor_analyzer.identify_competitors(top_queries)
@@ -191,10 +214,10 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
                 except Exception as e:
                     logger.error(f"Competitor analysis error: {str(e)}")
 
-                # Cannibalization needs careful review of its input requirements
-                logger.info("Performing Keyword Cannibalization Detection...")
+                logger.info("--- Starting Keyword Cannibalization Detection --- Dtypes:")
+                # Log dtypes of all dataframes as this function takes the dict
+                for name, df_log in data_frames.items(): logger.info(f"Dataframe '{name}':\n{df_log.dtypes}")
                 try:
-                    # Assuming it primarily needs query/page data
                     cannibalization_results = detect_keyword_cannibalization(data_frames)
                     analysis_results['keyword_cannibalization'] = cannibalization_results
                     vis_path = create_cannibalization_visualizations(cannibalization_results)
@@ -202,9 +225,9 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
                 except Exception as e:
                     logger.error(f"Cannibalization analysis error: {str(e)}")
             
-            # Content Gap Analysis (Depends on Competitor Analysis results)
             if 'competitor_analysis' in analysis_results:
-                 logger.info("Performing Content Gap Analysis...")
+                 logger.info("--- Starting Content Gap Analysis --- Dtypes:")
+                 for name, df_log in data_frames.items(): logger.info(f"Dataframe '{name}':\n{df_log.dtypes}")
                  try:
                      content_gaps = analyze_content_gaps(data_frames, analysis_results.get('competitor_analysis'))
                      analysis_results['content_gaps'] = content_gaps
@@ -213,31 +236,28 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
                  except Exception as e:
                     logger.error(f"Content gap analysis error: {str(e)}")
 
-        # SERP Features (May exist independently or with queries/pages)
         if 'serp_features' in data_frames:
-            logger.info("Performing SERP Feature Analysis...")
+            serp_features_df = data_frames['serp_features']
+            logger.info("--- Starting SERP Feature Analysis --- Dtypes:")
+            logger.info(f"\n{serp_features_df.dtypes}")
             try:
-                serp_features_df = data_frames['serp_features']
-                serp_analysis = analyze_serp_features(serp_features_df) # Adjust function if it needs more context
+                serp_analysis = analyze_serp_features(serp_features_df) 
                 analysis_results['serp_features'] = serp_analysis
                 vis_path = create_serp_feature_visualizations(serp_analysis)
                 if vis_path: visualization_paths['serp_visualizations'] = vis_path
             except Exception as e:
                 logger.error(f"SERP feature analysis error: {str(e)}")
 
-        # SERP Preview (Needs pages/URLs, potentially from multiple types?)
-        # Let's assume it primarily uses 'pages' or 'queries' df for URLs
         page_urls_available = False
         if 'pages' in data_frames and not data_frames['pages'].empty:
              page_urls_available = True
         elif 'queries' in data_frames and 'page' in data_frames['queries'].columns and not data_frames['queries'].empty:
              page_urls_available = True
-        # Add other potential sources like 'serp_features' if relevant
         
         if page_urls_available:
-            logger.info("Generating SERP Previews...")
+            logger.info("--- Starting SERP Preview Generation --- Dtypes:")
+            for name, df_log in data_frames.items(): logger.info(f"Dataframe '{name}':\n{df_log.dtypes}")
             try:
-                # Pass the combined dict; the function should extract needed URLs
                 serp_previews = generate_serp_previews(data_frames)
                 analysis_results['serp_previews'] = serp_previews
                 vis_path = create_serp_preview_visualizations(serp_previews)
@@ -245,62 +265,61 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
             except Exception as e:
                 logger.error(f"SERP preview error: {str(e)}")
 
-        # Device analysis
         if 'devices' in data_frames:
-            logger.info("Performing Device Analysis...")
-            analysis_results['device_analysis'] = analyze_device_data(data_frames['devices'])
+            devices_df = data_frames['devices']
+            logger.info("--- Starting Device Analysis --- Dtypes:")
+            logger.info(f"\n{devices_df.dtypes}")
+            analysis_results['device_analysis'] = analyze_device_data(devices_df)
             vis_path = create_device_visualizations(analysis_results['device_analysis'])
             if vis_path: visualization_paths['device_visualizations'] = vis_path
 
-        # Mobile Optimization (Often needs 'mobile' specific data, but might relate to device traffic)
         if 'mobile' in data_frames:
-            logger.info("Performing Mobile Optimization Analysis...")
+            mobile_df = data_frames['mobile']
+            logger.info("--- Starting Mobile Optimization Analysis --- Dtypes:")
+            logger.info(f"\n{mobile_df.dtypes}")
             try:
-                mobile_df = data_frames['mobile']
-                mobile_optimization = analyze_mobile_friendliness(mobile_df) # Assuming it takes the mobile df
+                mobile_optimization = analyze_mobile_friendliness(mobile_df) 
                 analysis_results['mobile_optimization'] = mobile_optimization
                 vis_path = create_mobile_visualizations(mobile_optimization)
                 if vis_path: visualization_paths['mobile_visualizations'] = vis_path
             except Exception as e:
                 logger.error(f"Mobile optimization analysis error: {str(e)}")
         elif 'devices' in data_frames:
-             # Fallback: Maybe infer some mobile insights from device distribution?
              logger.info("Mobile data not found, attempting basic insights from device data.")
-             # Add placeholder or basic analysis based on device df if desired
              pass 
 
-        # Temporal analysis
         if 'dates' in data_frames:
-            logger.info("Performing Temporal Analysis...")
-            analysis_results['temporal_analysis'] = analyze_temporal_patterns(data_frames['dates'])
+            dates_df = data_frames['dates']
+            logger.info("--- Starting Temporal Analysis --- Dtypes:")
+            logger.info(f"\n{dates_df.dtypes}")
+            analysis_results['temporal_analysis'] = analyze_temporal_patterns(dates_df)
             vis_path = create_temporal_visualizations(analysis_results['temporal_analysis'])
             if vis_path: visualization_paths['temporal_visualizations'] = vis_path
         
-        # Geographic analysis
         if 'countries' in data_frames:
-            logger.info("Performing Geographic Analysis...")
-            analysis_results['geo_analysis'] = analyze_geographic_data(data_frames['countries'])
+            countries_df = data_frames['countries']
+            logger.info("--- Starting Geographic Analysis --- Dtypes:")
+            logger.info(f"\n{countries_df.dtypes}")
+            analysis_results['geo_analysis'] = analyze_geographic_data(countries_df)
             vis_path = create_geographic_visualizations(analysis_results['geo_analysis'])
             if vis_path: visualization_paths['geo_visualizations'] = vis_path
             
-        # Backlink Analysis
         if 'backlinks' in data_frames:
-            logger.info("Performing Backlink Analysis...")
+            backlinks_df = data_frames['backlinks']
+            logger.info("--- Starting Backlink Analysis --- Dtypes:")
+            logger.info(f"\n{backlinks_df.dtypes}")
             try:
-                backlinks_df = data_frames['backlinks']
-                backlink_data = analyze_backlinks(backlinks_df) # Assuming it takes the backlinks df
+                backlink_data = analyze_backlinks(backlinks_df) 
                 analysis_results['backlink_analysis'] = backlink_data
                 vis_path = create_backlink_visualizations(backlink_data)
                 if vis_path: visualization_paths['backlink_visualizations'] = vis_path
             except Exception as e:
                 logger.error(f"Backlink analysis error: {str(e)}")
 
-        # SEO Health Score (Needs multiple data types? Check function)
-        # Let's assume it needs a variety, calculate if any relevant data exists
-        if any(key in data_frames for key in ['queries', 'pages', 'devices', 'countries', 'dates', 'mobile', 'backlinks']):
-            logger.info("Calculating SEO Health Score...")
+        if any(key in data_frames for key in ['queries', 'pages', 'devices', 'countries', 'dates', 'mobile', 'backlinks']): # Check based on relevant keys
+            logger.info("--- Starting SEO Health Score Calculation --- Dtypes:")
+            for name, df_log in data_frames.items(): logger.info(f"Dataframe '{name}':\n{df_log.dtypes}")
             try:
-                # Pass the whole dictionary, let the function handle it
                 health_score = seo_health_analyzer.calculate_health_score(data_frames)
                 analysis_results['seo_health'] = health_score
                 vis_path = create_seo_health_visualizations(health_score)
