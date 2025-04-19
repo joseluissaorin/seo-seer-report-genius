@@ -22,7 +22,7 @@ spacy==3.7.2
 umap-learn==0.5.4
 hdbscan==0.8.33
 adjustText==0.8
-scikit-network==0.29.1
+scikit-network==0.29.0
 plotly==5.18.0
 kaleido==0.2.1
 
