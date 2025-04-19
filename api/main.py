@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -68,7 +67,7 @@ async def analyze_seo(file: UploadFile, api_key: str = Form(...)):
         content = await file.read()
         processed_files = [{
             'filename': file.filename,
-            'content': io.StringIO(content.decode())
+            'content': io.StringIO(content.decode('utf-8', errors='replace'))
         }]
         
         # Organize files by type

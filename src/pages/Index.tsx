@@ -129,8 +129,9 @@ export default function Index() {
 
     try {
       const formData = new FormData();
-      files.forEach((file, index) => {
-        formData.append(`files`, file, file.name);
+      // Make sure we're passing files with the correct field name expected by the backend
+      files.forEach(file => {
+        formData.append('file', file);
       });
       formData.append('api_key', apiKey);
 
@@ -147,8 +148,9 @@ export default function Index() {
       clearInterval(progressInterval);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to generate SEO report');
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(errorText || 'Failed to generate SEO report');
       }
 
       setProgress(100);
