@@ -94,8 +94,8 @@ if __name__ == "__main__":
                         default="seo_analysis_report_client.pdf", 
                         help="Name for the output PDF file (default: seo_analysis_report_client.pdf).")
     parser.add_argument("-u", "--api-url", 
-                        default="http://127.0.0.1:4568/analyze-seo", 
-                        help="URL of the running SEO analysis API endpoint (default: http://127.0.0.1:4568/analyze-seo).")
+                        default="http://localhost:4568/analyze-seo", 
+                        help="URL of the running SEO analysis API endpoint (default: http://localhost:4568/analyze-seo).")
 
     args = parser.parse_args()
 

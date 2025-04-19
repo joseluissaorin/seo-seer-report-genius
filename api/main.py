@@ -166,7 +166,6 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
         visualization_paths = {} # Store paths to generated images
         
         # --- Conditional Analysis with Logging --- 
-        
         if 'queries' in data_frames or 'pages' in data_frames:
             queries_df = data_frames.get('queries') 
             pages_df = data_frames.get('pages')
@@ -174,13 +173,13 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
             if queries_df is not None:
                 logger.info("--- Starting Query Analysis --- Dtypes:")
                 logger.info(f"\n{queries_df.dtypes}")
-            analysis_results['query_analysis'] = query_analyzer.analyze_query_patterns(queries_df)
+                analysis_results['query_analysis'] = query_analyzer.analyze_query_patterns(queries_df)
                 vis_path = create_query_visualizations(analysis_results['query_analysis'])
                 if vis_path: visualization_paths['query_visualizations'] = vis_path
             
             top_queries = queries_df.sort_values('impressions', ascending=False)['query'].head(10).tolist()
             
-                logger.info("--- Starting Keyword Research --- ")
+            logger.info("--- Starting Keyword Research --- ")
             try:
                 keyword_data = {}
                 trends = keyword_researcher.research_keyword_trends(top_queries[:5])
@@ -191,12 +190,12 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
                 difficulties = keyword_researcher.analyze_keyword_difficulty(top_queries[:5])
                 keyword_data['difficulty'] = difficulties
                 analysis_results['keyword_research'] = keyword_data
-                    vis_path = create_keyword_research_visualizations(keyword_data)
-                    if vis_path: visualization_paths['keyword_visualizations'] = vis_path
+                vis_path = create_keyword_research_visualizations(keyword_data)
+                if vis_path: visualization_paths['keyword_visualizations'] = vis_path
             except Exception as e:
-                    logger.error(f"Keyword research error: {str(e)}")
+                logger.error(f"Keyword research error: {str(e)}")
             
-                logger.info("--- Starting Competitor Analysis --- ")
+            logger.info("--- Starting Competitor Analysis --- ")
             try:
                 competitor_data = {}
                 competitors = competitor_analyzer.identify_competitors(top_queries)
@@ -209,21 +208,22 @@ async def analyze_seo(files: List[UploadFile] = File(...), api_key: str = Form(.
                     ranking_comparison = competitor_analyzer.compare_rankings(top_queries[:5], top_competitor)
                     competitor_data['ranking_comparison'] = ranking_comparison
                 analysis_results['competitor_analysis'] = competitor_data
-                    vis_path = create_competitor_visualizations(competitor_data)
-                    if vis_path: visualization_paths['competitor_visualizations'] = vis_path
+                vis_path = create_competitor_visualizations(competitor_data)
+                if vis_path: visualization_paths['competitor_visualizations'] = vis_path
             except Exception as e:
-                    logger.error(f"Competitor analysis error: {str(e)}")
+                logger.error(f"Competitor analysis error: {str(e)}")
 
-                logger.info("--- Starting Keyword Cannibalization Detection --- Dtypes:")
-                # Log dtypes of all dataframes as this function takes the dict
-                for name, df_log in data_frames.items(): logger.info(f"Dataframe '{name}':\n{df_log.dtypes}")
+            logger.info("--- Starting Keyword Cannibalization Detection --- Dtypes:")
+            # Log dtypes of all dataframes as this function takes the dict
+            for name, df_log in data_frames.items():
+                logger.info(f"Dataframe '{name}':\n{df_log.dtypes}")
             try:
                 cannibalization_results = detect_keyword_cannibalization(data_frames)
                 analysis_results['keyword_cannibalization'] = cannibalization_results
-                    vis_path = create_cannibalization_visualizations(cannibalization_results)
-                    if vis_path: visualization_paths['cannibalization_visualizations'] = vis_path
+                vis_path = create_cannibalization_visualizations(cannibalization_results)
+                if vis_path: visualization_paths['cannibalization_visualizations'] = vis_path
             except Exception as e:
-                    logger.error(f"Cannibalization analysis error: {str(e)}")
+                logger.error(f"Cannibalization analysis error: {str(e)}")
             
             if 'competitor_analysis' in analysis_results:
                  logger.info("--- Starting Content Gap Analysis --- Dtypes:")
@@ -475,25 +475,26 @@ def generate_pdf_report(report_data: Dict, api_key: str, data_frames: Dict[str, 
             logger.info(f"Adding section: {title}")
             story.append(Paragraph(title, styles['h2']))
             data = report_data[analysis_key]
-            
+
             # Add textual summary if exists
             if isinstance(data, dict) and 'summary' in data:
                 story.append(Paragraph(data['summary'].replace('\n', '<br/>'), summary_style))
                 story.append(Spacer(1, 6))
-                
+
             # Add specific formatted data using the provided formatter function
             if data_formatter:
-                 try:
-                     formatted_elements = data_formatter(data)
-                     story.extend(formatted_elements)
-                 except Exception as e:
-                     logger.error(f"Error formatting data for {title}: {str(e)}", exc_info=True)
-                     story.append(Paragraph(f"Error displaying data for {title}.", styles['Normal']))
+                try:
+                    formatted_elements = data_formatter(data)
+                    story.extend(formatted_elements)
+                except Exception as e:
+                    logger.error(f"Error formatting data for {title}: {str(e)}", exc_info=True)
+                    story.append(Paragraph(f"Error displaying data for {title}.", styles['Normal']))
 
             # Add visualization if key exists and path is valid
             if visualization_key and visualization_key in report_data:
                 img_path = report_data[visualization_key]
-                if img_path and os.path.exists(img_path):
+                # --- Check if img_path is a valid string before using os.path.exists ---
+                if isinstance(img_path, str) and img_path and os.path.exists(img_path):
                     logger.info(f"Adding image {img_path} to PDF section {title}.")
                     try:
                         img = Image(img_path, width=500, height=250) # Adjust size
@@ -503,8 +504,16 @@ def generate_pdf_report(report_data: Dict, api_key: str, data_frames: Dict[str, 
                     except Exception as e:
                         logger.error(f"Error adding image {img_path}: {str(e)}")
                 else:
-                    logger.warning(f"Visualization image not found or invalid path: {img_path}")
-            story.append(Spacer(1, 12))
+                    # Log appropriately if it's not a string or doesn't exist
+                    if not isinstance(img_path, str):
+                        logger.warning(f"Visualization key '{visualization_key}' provided non-string data (type: {type(img_path)}), expected a file path.")
+                    elif not img_path:
+                        logger.warning(f"Empty path provided for visualization key '{visualization_key}'.")
+                    else: # It was a string, but didn't exist
+                        logger.warning(f"Visualization image not found at path: {img_path}")
+            
+            # Add a spacer after the section (image or text)
+            story.append(Spacer(1, 12)) 
             return True
         return False
 
