@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import Footer from './components/Footer';
@@ -17,7 +16,7 @@ const App: React.FC = () => {
       <main className="flex-grow">
         <div className="container mx-auto p-4">
           <h1 className="text-3xl font-semibold mb-4">SEO Seer Report Genius</h1>
-          <Tabs defaultValue="upload">
+          <Tabs defaultvalue="upload">
             <TabsList>
               <TabsTrigger value="upload">1. Upload GSC Data</TabsTrigger>
               <TabsTrigger value="report" disabled={!reportData}>2. View Report</TabsTrigger>
